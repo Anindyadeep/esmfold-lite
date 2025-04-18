@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -13,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { InfoIcon } from "lucide-react";
+import { useJobsStore } from "@/store/jobsStore";
 
 interface Job {
   id: string;
@@ -76,23 +75,23 @@ const proteinExamples = [
 ];
 
 export default function Jobs() {
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    inputString: "",
-  });
+  const { jobs, formData, setFormData, addJob, resetFormData } = useJobsStore();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement job submission logic
-    console.log("Submitting job:", formData);
+    const newJob = {
+      id: `job_${Date.now()}`,
+      name: formData.name,
+      description: formData.description,
+      status: 'queued' as const,
+      submittedAt: new Date().toISOString(),
+    };
+    addJob(newJob);
+    resetFormData();
   };
 
   const handleExampleClick = (sequence: string) => {
-    setFormData(prev => ({
-      ...prev,
-      inputString: sequence
-    }));
+    setFormData({ inputString: sequence });
   };
 
   const getStatusBadgeColor = (status: Job['status']) => {
@@ -126,7 +125,7 @@ export default function Jobs() {
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => setFormData({ name: e.target.value })}
                   placeholder="Enter job name"
                   required
                 />
@@ -137,7 +136,7 @@ export default function Jobs() {
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) => setFormData({ description: e.target.value })}
                   placeholder="Enter job description"
                   className="h-24"
                   required
@@ -149,7 +148,7 @@ export default function Jobs() {
                 <Textarea
                   id="inputString"
                   value={formData.inputString}
-                  onChange={(e) => setFormData({ ...formData, inputString: e.target.value })}
+                  onChange={(e) => setFormData({ inputString: e.target.value })}
                   placeholder="Enter protein sequence in FASTA format"
                   className="h-[calc(100%-2rem)]"
                   required
@@ -210,7 +209,7 @@ export default function Jobs() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockJobs.map((job) => (
+              {jobs.map((job) => (
                 <TableRow key={job.id}>
                   <TableCell className="font-mono">{job.id}</TableCell>
                   <TableCell>{job.name}</TableCell>

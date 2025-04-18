@@ -5,6 +5,37 @@ import { Slider } from '../ui/slider';
 import { ViewerState } from './index';
 import { Molecule } from '@/utils/pdbParser';
 import { parsePDB } from '@/utils/pdbParser';
+import { Check, X, ChevronsUpDown } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { cn } from '@/lib/utils';
+import { ScrollArea } from '../ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+// Dummy data for completed jobs
+const completedJobs = [
+  { id: 'ESM-1', name: 'Protein Structure Prediction 1' },
+  { id: 'ESM-2', name: 'Protein Structure Prediction 2' },
+  { id: 'ESM-3', name: 'Protein Structure Prediction 3' },
+  { id: 'ESM-4', name: 'Protein Structure Prediction 4' },
+  { id: 'ESM-5', name: 'Protein Structure Prediction 5' },
+];
 
 interface ViewerControlsProps {
   viewerState: ViewerState;
@@ -33,6 +64,24 @@ export function ViewerControls({
   onDeleteMolecule,
   onSelectMolecule
 }: ViewerControlsProps) {
+  const [selectedJobs, setSelectedJobs] = React.useState<typeof completedJobs>([]);
+  const [open, setOpen] = React.useState(false);
+
+  const toggleJob = (job: typeof completedJobs[0]) => {
+    setSelectedJobs(current => {
+      const isSelected = current.some(j => j.id === job.id);
+      if (isSelected) {
+        return current.filter(j => j.id !== job.id);
+      } else {
+        return [...current, job];
+      }
+    });
+  };
+
+  const removeJob = (jobId: string) => {
+    setSelectedJobs(current => current.filter(job => job.id !== jobId));
+  };
+
   // Color schemes
   const colorSchemes = [
     ['#8B5CF6', '#D946EF', '#F97316', '#0EA5E9'], // Purple to Blue
@@ -157,6 +206,77 @@ export function ViewerControls({
               </button>
             </div>
           ))}
+        </div>
+
+        {/* Completed Jobs Section */}
+        <div className="mt-6">
+          <h3 className="text-sm font-medium mb-2">Completed Jobs</h3>
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={open}
+                className="w-full justify-between"
+              >
+                {selectedJobs.length === 0
+                  ? "Select completed jobs..."
+                  : `${selectedJobs.length} job${selectedJobs.length === 1 ? '' : 's'} selected`}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+              <Command>
+                <CommandInput placeholder="Search jobs..." />
+                <CommandEmpty>No jobs found.</CommandEmpty>
+                <CommandGroup className="max-h-[200px] overflow-auto">
+                  {completedJobs.map((job) => (
+                    <CommandItem
+                      key={job.id}
+                      onSelect={() => toggleJob(job)}
+                      className="flex items-center gap-2"
+                    >
+                      <div
+                        className={cn(
+                          "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border",
+                          selectedJobs.some(j => j.id === job.id)
+                            ? "bg-primary text-primary-foreground"
+                            : "opacity-50 [&_svg]:invisible"
+                        )}
+                      >
+                        <Check className={cn("h-4 w-4")} />
+                      </div>
+                      <span>{job.name}</span>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {job.id}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
+          {/* Selected Jobs List */}
+          <div className="mt-4 space-y-2">
+            {selectedJobs.map((job) => (
+              <div
+                key={job.id}
+                className="flex items-center justify-between p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <div className="flex-1 truncate">
+                  <span className="text-sm">{job.name}</span>
+                  <span className="text-xs text-gray-500 ml-2">({job.id})</span>
+                </div>
+                <button
+                  className="text-red-500 hover:text-red-700"
+                  onClick={() => removeJob(job.id)}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </Card>
 

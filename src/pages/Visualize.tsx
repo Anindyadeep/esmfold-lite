@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import FileUploader from '@/components/FileUploader';
 import FileList from '@/components/FileList';
 import { ViewControls } from '@/components/ViewControls';
@@ -7,6 +7,7 @@ import { parsePDB, Molecule } from '@/utils/pdbParser';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useVisualizeStore } from '@/store/visualizeStore';
 import { ViewMode, ColorScheme } from '@/types/viewer';
 
 interface MoleculeStats {
@@ -80,89 +81,98 @@ const calculateMoleculeStats = (molecule: Molecule): MoleculeStats => {
 };
 
 export default function Visualize() {
-  // State for files and structures
-  const [files, setFiles] = useState<{ file: File; molecule?: Molecule }[]>([]);
-  const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>(null);
-  const [loadedStructures, setLoadedStructures] = useState<{ id: string; pdbData: string }[]>([]);
-  
-  // Viewer state
-  const [viewerState, setViewerState] = useState({
-    viewMode: 'cartoon' as ViewMode,
-    colorScheme: 'DEFAULT' as ColorScheme
-  });
+  const {
+    files,
+    selectedFileIndex,
+    loadedStructures,
+    viewerState,
+    addFiles,
+    updateFile,
+    setSelectedFileIndex,
+    addLoadedStructures,
+    setViewerState,
+    deleteFile
+  } = useVisualizeStore();
 
   // Calculate statistics for the selected molecule
   const selectedMoleculeStats = useMemo(() => {
+    console.log('Calculating stats:', { selectedFileIndex, files });
     if (selectedFileIndex !== null && files[selectedFileIndex]?.molecule) {
-      return calculateMoleculeStats(files[selectedFileIndex].molecule!);
+      const stats = calculateMoleculeStats(files[selectedFileIndex].molecule!);
+      console.log('Calculated stats:', stats);
+      return stats;
     }
+    console.log('No molecule data available for stats');
     return null;
   }, [selectedFileIndex, files]);
 
   // Process files when uploaded
   const handleFilesUploaded = async (newFiles: File[]) => {
-    // Add files to state immediately
-    setFiles(prev => [...prev, ...newFiles.map(file => ({ file }))]);
+    console.log('Files uploaded:', newFiles);
     
-    // Process each file
-    for (const file of newFiles) {
+    // Process each file first
+    const processedFiles = await Promise.all(newFiles.map(async (file) => {
       try {
-        // Parse molecule data
+        console.log('Processing file:', file.name);
         const molecule = await parsePDB(file);
-        setFiles(prev => {
-          const index = prev.findIndex(f => f.file === file);
-          if (index === -1) return prev;
-          const newFiles = [...prev];
-          newFiles[index] = { file, molecule };
-          return newFiles;
-        });
-
-        // Load PDB data for visualization
+        console.log('Parsed molecule:', molecule);
         const pdbData = await file.text();
-        setLoadedStructures(prev => [...prev, { id: file.name, pdbData }]);
-        
-        // Auto-select the first file if none selected
-        setSelectedFileIndex(prev => prev === null ? 0 : prev);
+        return { file, molecule, pdbData };
       } catch (error) {
-        console.error('Error processing PDB file:', error);
+        console.error('Error processing file:', file.name, error);
+        return { file, error };
       }
+    }));
+
+    // Filter out failed files
+    const successfulFiles = processedFiles.filter(f => !f.error);
+    const failedFiles = processedFiles.filter(f => f.error);
+
+    if (failedFiles.length > 0) {
+      console.error('Failed to process files:', failedFiles.map(f => f.file.name));
+      // You might want to show an error message to the user here
     }
-  };
-  
-  const handleDeleteFile = (index: number) => {
-    // Remove from files state
-    setFiles(prev => {
-      const newFiles = [...prev];
-      newFiles.splice(index, 1);
-      return newFiles;
-    });
+
+    if (successfulFiles.length === 0) {
+      console.error('No files were processed successfully');
+      return;
+    }
+
+    // Add files to state
+    addFiles(successfulFiles.map(({ file, molecule }) => ({ file, molecule })));
     
-    // Remove from loaded structures
-    setLoadedStructures(prev => {
-      const newStructures = [...prev];
-      newStructures.splice(index, 1);
-      return newStructures;
-    });
-    
-    // Update selected file index
-    if (selectedFileIndex === index) {
-      setSelectedFileIndex(files.length > 1 ? 0 : null);
-    } else if (selectedFileIndex !== null && selectedFileIndex > index) {
-      setSelectedFileIndex(selectedFileIndex - 1);
+    // Add structures for visualization
+    addLoadedStructures(successfulFiles.map(({ file, pdbData }) => ({
+      id: file.name,
+      pdbData
+    })));
+
+    // Auto-select the first file if none selected
+    if (selectedFileIndex === null) {
+      console.log('Auto-selecting first file');
+      setSelectedFileIndex(0);
     }
   };
 
   const handleViewModeChange = (mode: ViewMode) => {
-    setViewerState(prev => ({ ...prev, viewMode: mode }));
+    setViewerState({ viewMode: mode });
   };
 
   const handleColorSchemeChange = (scheme: ColorScheme) => {
-    setViewerState(prev => ({ ...prev, colorScheme: scheme }));
+    setViewerState({ colorScheme: scheme });
   };
 
   const handleCenter = () => {
     // Center view logic will be handled by NGLViewer component
   };
+
+  // Add debug logging for render
+  console.log('Render state:', {
+    filesCount: files.length,
+    selectedFileIndex,
+    hasMolecule: selectedFileIndex !== null ? !!files[selectedFileIndex]?.molecule : false,
+    hasStats: !!selectedMoleculeStats
+  });
 
   return (
     <div className="grid grid-cols-12 gap-6">
@@ -172,21 +182,19 @@ export default function Visualize() {
           <FileUploader onFilesUploaded={handleFilesUploaded} />
         </Card>
         
-        <Card>
+        <Card className="p-4">
           <ViewControls
             viewerState={viewerState}
+            molecules={files}
+            selectedMoleculeIndex={selectedFileIndex}
             onViewModeChange={handleViewModeChange}
             onColorSchemeChange={handleColorSchemeChange}
-            onCenter={handleCenter}
-          />
-        </Card>
-
-        <Card className="p-4">
-          <FileList
-            files={files}
-            selectedIndex={selectedFileIndex}
-            onSelect={setSelectedFileIndex}
-            onDelete={handleDeleteFile}
+            onFilesUploaded={handleFilesUploaded}
+            onDeleteMolecule={deleteFile}
+            onSelectMolecule={setSelectedFileIndex}
+            onAtomSizeChange={(size) => setViewerState({ atomSize: size })}
+            onLigandVisibilityChange={(visible) => setViewerState({ showLigand: visible })}
+            onWaterIonVisibilityChange={(visible) => setViewerState({ showWaterIon: visible })}
           />
         </Card>
       </div>
@@ -199,9 +207,9 @@ export default function Visualize() {
           />
         </Card>
             
-        {selectedFileIndex !== null && files[selectedFileIndex]?.molecule && (
-          <Card className="p-5 flex-shrink-0">
-            <Tabs defaultValue="info" className="w-full">
+        <Card className="p-5 flex-shrink-0">
+          {selectedFileIndex !== null && files[selectedFileIndex]?.molecule ? (
+            <Tabs defaultValue="stats" className="w-full">
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="info">Molecule Info</TabsTrigger>
                 <TabsTrigger value="stats">Statistics</TabsTrigger>
@@ -230,7 +238,7 @@ export default function Visualize() {
                 </div>
               </TabsContent>
               <TabsContent value="stats" className="mt-4">
-                {selectedMoleculeStats && (
+                {selectedMoleculeStats ? (
                   <div className="space-y-6">
                     {/* Atom Statistics */}
                     <div>
@@ -346,11 +354,22 @@ export default function Visualize() {
                       </div>
                     </div>
                   </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <h3 className="text-xl font-semibold mb-2">No Statistics Available</h3>
+                    <p>Please make sure a PDB file is selected and properly loaded</p>
+                    <p className="text-sm mt-2">If you're seeing this message with a file selected, there might be an error processing the file.</p>
+                  </div>
                 )}
               </TabsContent>
             </Tabs>
-          </Card>
-        )}
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <h3 className="text-xl font-semibold mb-2">No Structure Selected</h3>
+              <p>Upload and select a PDB file to view statistics</p>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );

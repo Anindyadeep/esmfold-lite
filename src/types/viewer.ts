@@ -1,8 +1,11 @@
 export type ViewMode = 'cartoon' | 'spacefill' | 'licorice' | 'surface';
 
-export type ColorScheme = 'DEFAULT' | 'ELEMENT' | 'RESIDUE' | 'CHAIN' | 'BFACTOR' | 'ATOMINDEX' | 'ELECTROSTATIC' | 'CUSTOM';
+export type ColorScheme = 'DEFAULT' | 'CHAIN' | 'RESIDUE' | 'ELEMENT' | 'BFACTOR' | 'SEQUENCE';
 
 export interface ViewerState {
   viewMode: ViewMode;
   colorScheme: ColorScheme;
+  atomSize: number;
+  showLigand: boolean;
+  showWaterIon: boolean;
 } 

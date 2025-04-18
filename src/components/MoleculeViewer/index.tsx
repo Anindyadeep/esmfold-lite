@@ -3,6 +3,7 @@ import { ViewerControls } from './ViewerControls';
 import { NGLViewport } from './NGLViewport';
 import { Card } from '../ui/card';
 import { Molecule } from '@/utils/pdbParser';
+import { CompletedJobs } from '../CompletedJobs';
 
 export interface ViewerState {
   viewMode: string;
@@ -85,7 +86,7 @@ export function MoleculeViewer() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left sidebar with controls */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 space-y-6">
           <ViewerControls
             viewerState={viewerState}
             molecules={molecules}
@@ -99,6 +100,7 @@ export function MoleculeViewer() {
             onDeleteMolecule={handleDeleteMolecule}
             onSelectMolecule={setSelectedMoleculeIndex}
           />
+          <CompletedJobs />
         </div>
 
         {/* Main viewer area */}
