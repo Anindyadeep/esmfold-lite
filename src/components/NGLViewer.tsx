@@ -1,46 +1,72 @@
-import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, useRef, forwardRef } from 'react';
 import * as NGL from 'ngl';
 import { ViewerState } from '@/types/viewer';
 
 interface NGLViewerProps {
-  structures: { id: string; pdbData: string }[];  // Changed to accept multiple structures
+  structures: { id: string; pdbData: string }[];
   viewerState: ViewerState;
 }
 
-// Custom color scheme based on B-factor
-const createBFactorColorScheme = () => {
-  return NGL.ColormakerRegistry.addScheme(function (params) {
-    this.atomColor = function (atom) {
-      if (atom.bfactor > 90) {
-        return 0x106DFF; // blue
-      } else if (atom.bfactor > 70) {
-        return 0x10CFF1; // light blue
-      } else if (atom.bfactor > 50) {
-        return 0xF6ED12; // yellow
-      } else {
-        return 0xEF821E; // orange
-      }
-    };
-  });
+// Define colors for different structures in DEFAULT mode
+const STRUCTURE_COLORS = [
+  0x0077BE, // Blue
+  0xBE0077, // Pink
+  0x77BE00, // Green
+  0xBE7700, // Orange
+  0x00BEB7, // Teal
+  0x7700BE, // Purple
+  0xBEB700, // Yellow
+  0x00BE77  // Mint
+];
+
+// Color scheme definitions
+const COLOR_SCHEMES = {
+  DEFAULT: 'uniform',
+  ELEMENT: 'element',
+  RESIDUE: 'resname',
+  CHAIN: 'chainindex',
+  BFACTOR: 'bfactor',
+  ATOMINDEX: 'atomindex',
+  ELECTROSTATIC: 'electrostatic'
 };
 
-// Define some colors for different structures
-const structureColors = [
-  [0x0077BE, 0x00A0E3, 0x00C5FF], // Blue shades
-  [0xBE0077, 0xE300A0, 0xFF00C5], // Pink shades
-  [0x77BE00, 0xA0E300, 0xC5FF00], // Green shades
-  [0xBE7700, 0xE3A000, 0xFFC500], // Orange shades
-];
+// Get color scheme parameters based on the selected scheme
+const getColorSchemeParams = (scheme: string, structureIndex: number = 0) => {
+  if (scheme === COLOR_SCHEMES.DEFAULT) {
+    return {
+      color: STRUCTURE_COLORS[structureIndex % STRUCTURE_COLORS.length]
+    };
+  }
+
+  switch (scheme) {
+    case COLOR_SCHEMES.ELECTROSTATIC:
+      return {
+        colorScheme: scheme,
+        colorDomain: [-0.3, 0.3],
+        surfaceType: 'av'
+      };
+    case COLOR_SCHEMES.BFACTOR:
+      return {
+        colorScheme: scheme,
+        colorScale: 'RdYlBu',
+        colorReverse: true
+      };
+    case COLOR_SCHEMES.ATOMINDEX:
+      return {
+        colorScheme: scheme,
+        colorScale: 'rainbow'
+      };
+    default:
+      return { colorScheme: scheme };
+  }
+};
 
 export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerState }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<any>(null);
-  const bFactorSchemeId = useRef<string>();
   const loadedStructuresRef = useRef<Map<string, any>>(new Map());
 
-  // Forward the stage ref
-  useImperativeHandle(ref, () => stageRef.current);
-
+  // Initialize NGL Stage
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -61,18 +87,12 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
       fogFar: 1000,
       cameraType: 'perspective',
       cameraFov: 40,
-      cameraEyeSep: 0.3,
-      sampleLevel: 0,
     });
-
-    // Register custom color scheme
-    bFactorSchemeId.current = createBFactorColorScheme();
 
     // Handle window resizing
     const handleResize = () => {
       if (stageRef.current) {
         stageRef.current.handleResize();
-        stageRef.current.viewer.requestRender();
       }
     };
     window.addEventListener('resize', handleResize);
@@ -92,26 +112,13 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
       if (!stageRef.current) return;
 
       try {
-        // Remove structures that are no longer in the list
-        const currentIds = new Set(structures.map(s => s.id));
-        for (const [id, component] of loadedStructuresRef.current.entries()) {
-          if (!currentIds.has(id)) {
-            component.dispose();
-            loadedStructuresRef.current.delete(id);
-          }
-        }
+        // Remove all existing components and clear the map
+        stageRef.current.removeAllComponents();
+        loadedStructuresRef.current.clear();
 
-        // Load or update each structure
+        // Load each structure
         for (let i = 0; i < structures.length; i++) {
           const { id, pdbData } = structures[i];
-          const colorSet = structureColors[i % structureColors.length];
-
-          // Skip if structure already loaded
-          if (loadedStructuresRef.current.has(id)) {
-            const component = loadedStructuresRef.current.get(id);
-            updateRepresentation(component, i);
-            continue;
-          }
 
           // Load new structure
           const blob = new Blob([pdbData], { type: 'text/plain' });
@@ -124,79 +131,88 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
 
         // Center view if any structures are loaded
         if (structures.length > 0) {
-          // Set initial camera position
-          const viewer = stageRef.current.viewer;
-          viewer.setCamera('perspective');
-          viewer.setCameraPosition([0, 0, 100]);
-          
-          // Center and zoom with animation
           stageRef.current.autoView(1000);
-          stageRef.current.animationControls.rotate([ 0, 1, 0 ], 0.1);
         }
       } catch (error) {
         console.error('Error loading structures:', error);
       }
     };
 
-    const updateRepresentation = (structure: any, index: number) => {
+    const updateRepresentation = (structure: any, structureIndex: number) => {
       // Remove existing representations
       structure.removeAllRepresentations();
 
-      const colorSet = structureColors[index % structureColors.length];
-      const mainColor = colorSet[0];
+      // Get color scheme parameters
+      const colorParams = getColorSchemeParams(COLOR_SCHEMES[viewerState.colorScheme] || COLOR_SCHEMES.DEFAULT, structureIndex);
 
       // Add main representation based on viewMode
       switch (viewerState.viewMode) {
         case 'cartoon':
           structure.addRepresentation('cartoon', {
-            sele: 'polymer',
+            name: "polymer",
+            sele: "polymer",
+            quality: 'high',
             aspectRatio: 2.0,
-            scale: 0.7,
+            scale: viewerState.atomSize,
             smoothSheet: true,
-            color: mainColor,
+            ...colorParams
           });
           break;
         case 'spacefill':
           structure.addRepresentation('spacefill', {
-            sele: 'polymer',
+            name: "polymer",
+            sele: "polymer",
+            quality: 'high',
             scale: viewerState.atomSize,
-            color: mainColor,
+            ...colorParams
           });
           break;
         case 'licorice':
           structure.addRepresentation('licorice', {
-            sele: 'polymer',
+            name: "polymer",
+            sele: "polymer",
+            quality: 'high',
             scale: viewerState.atomSize,
-            color: mainColor,
+            ...colorParams
           });
           break;
         case 'surface':
           structure.addRepresentation('surface', {
-            sele: 'polymer',
-            opacity: 0.7,
-            color: mainColor,
+            name: "polymer",
+            sele: "polymer",
+            quality: 'high',
+            scale: viewerState.atomSize,
+            surfaceType: 'vws',
+            opacity: 0.85,
+            ...colorParams
           });
           break;
       }
 
       // Add ligand representation if enabled
       if (viewerState.showLigand) {
-        structure.addRepresentation('ball+stick', {
-          sele: 'not (polymer or water or ion)',
-          scale: viewerState.atomSize,
+        structure.addRepresentation("ball+stick", {
+          name: "ligand",
+          visible: true,
+          sele: "not ( polymer or water or ion )",
+          quality: 'high',
           aspectRatio: 1.5,
+          scale: viewerState.atomSize * 1.2,
           bondScale: viewerState.atomSize * 0.3,
           bondSpacing: 1.0,
-          color: colorSet[1],
+          colorScheme: 'element'
         });
       }
 
       // Add water/ion representation if enabled
       if (viewerState.showWaterIon) {
-        structure.addRepresentation('ball+stick', {
-          sele: 'water or ion',
-          scale: viewerState.atomSize * 0.5,
-          color: colorSet[2],
+        structure.addRepresentation("spacefill", {
+          name: "waterIon",
+          visible: true,
+          sele: "water or ion",
+          scale: viewerState.atomSize * 0.25,
+          quality: 'high',
+          colorScheme: 'element'
         });
       }
     };
@@ -205,16 +221,12 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
   }, [structures, viewerState]);
 
   return (
-    <div 
-      ref={containerRef}
-      className="w-full h-full rounded-lg overflow-hidden"
-      style={{ 
-        minHeight: '600px',
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}
-    />
+    <div className="relative w-full h-full">
+      <div
+        ref={containerRef}
+        className="w-full h-full rounded-lg overflow-hidden"
+        style={{ minHeight: '600px' }}
+      />
+    </div>
   );
 });

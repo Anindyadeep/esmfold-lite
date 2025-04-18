@@ -8,6 +8,32 @@ interface NGLViewportProps {
   viewerState: ViewerState;
 }
 
+// Color scheme definitions
+const COLOR_SCHEMES = {
+  DEFAULT: 'chainindex',
+  ELEMENT: 'element',
+  RESIDUE: 'resname',
+  CHAIN: 'chainindex',
+  BFACTOR: 'bfactor',
+  ATOMINDEX: 'atomindex',
+  ELECTROSTATIC: 'electrostatic'
+};
+
+// Custom color scheme based on atom properties
+const createCustomColorScheme = () => {
+  return NGL.ColormakerRegistry.addScheme(function (params) {
+    this.atomColor = function (atom) {
+      if (atom.serial < 1000) {
+        return 0x0000FF; // blue
+      } else if (atom.serial > 2000) {
+        return 0xFF0000; // red
+      } else {
+        return 0x00FF00; // green
+      }
+    };
+  });
+};
+
 // Map our UI view modes to NGL representation types
 const viewModeToRepresentation = (mode: string): string => {
   switch (mode) {
@@ -22,9 +48,35 @@ const viewModeToRepresentation = (mode: string): string => {
   }
 };
 
+// Get color scheme parameters based on the selected scheme
+const getColorSchemeParams = (scheme: string) => {
+  switch (scheme) {
+    case COLOR_SCHEMES.ELECTROSTATIC:
+      return {
+        colorScheme: scheme,
+        colorDomain: [-0.3, 0.3],
+        surfaceType: 'av'
+      };
+    case COLOR_SCHEMES.BFACTOR:
+      return {
+        colorScheme: scheme,
+        colorScale: 'RdYlBu',
+        colorReverse: true
+      };
+    case COLOR_SCHEMES.ATOMINDEX:
+      return {
+        colorScheme: scheme,
+        colorScale: 'rainbow'
+      };
+    default:
+      return { colorScheme: scheme };
+  }
+};
+
 export function NGLViewport({ molecule, viewerState }: NGLViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<any>(null);
+  const customColorSchemeRef = useRef<string | null>(null);
 
   // Initialize NGL Stage
   useEffect(() => {
@@ -89,6 +141,18 @@ export function NGLViewport({ molecule, viewerState }: NGLViewportProps) {
         const representation = viewModeToRepresentation(viewerState.viewMode);
         console.log("Using representation:", representation);
 
+        // Register custom color scheme if needed
+        if (viewerState.colorScheme === 'custom' && !customColorSchemeRef.current) {
+          customColorSchemeRef.current = createCustomColorScheme();
+        }
+
+        // Get color scheme parameters
+        const colorScheme = viewerState.colorScheme === 'custom' 
+          ? customColorSchemeRef.current 
+          : COLOR_SCHEMES[viewerState.colorScheme as keyof typeof COLOR_SCHEMES] || COLOR_SCHEMES.DEFAULT;
+        
+        const colorParams = getColorSchemeParams(colorScheme);
+
         // Add main representation based on viewMode
         if (representation === 'cartoon') {
           structure.addRepresentation('cartoon', {
@@ -98,7 +162,7 @@ export function NGLViewport({ molecule, viewerState }: NGLViewportProps) {
             aspectRatio: 2.0,
             scale: viewerState.atomSize,
             smoothSheet: true,
-            colorScheme: "chainindex"
+            ...colorParams
           });
         } else if (representation === 'ball+stick') {
           structure.addRepresentation('ball+stick', {
@@ -108,7 +172,8 @@ export function NGLViewport({ molecule, viewerState }: NGLViewportProps) {
             aspectRatio: 1.5,
             scale: viewerState.atomSize,
             bondScale: viewerState.atomSize * 0.3,
-            bondSpacing: 1.0
+            bondSpacing: 1.0,
+            ...colorParams
           });
         } else if (representation === 'surface') {
           structure.addRepresentation('surface', {
@@ -117,8 +182,8 @@ export function NGLViewport({ molecule, viewerState }: NGLViewportProps) {
             quality: 'high',
             scale: viewerState.atomSize,
             surfaceType: 'vws',
-            colorScheme: "chainindex",
-            opacity: 0.85
+            opacity: 0.85,
+            ...colorParams
           });
         }
 
