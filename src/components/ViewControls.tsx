@@ -1,11 +1,12 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Upload } from "lucide-react";
+import { Crosshair } from "lucide-react";
 import { ViewerState, ViewMode } from '@/types/viewer';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from '@/components/ui/separator';
 
 interface ViewControlsProps {
   viewerState: ViewerState;
@@ -14,7 +15,6 @@ interface ViewControlsProps {
   onWaterIonVisibilityChange: (visible: boolean) => void;
   onViewModeChange: (mode: ViewMode) => void;
   onCenter: () => void;
-  onFileUpload: (file: File) => void;
 }
 
 export const ViewControls: React.FC<ViewControlsProps> = ({
@@ -24,37 +24,17 @@ export const ViewControls: React.FC<ViewControlsProps> = ({
   onWaterIonVisibilityChange,
   onViewModeChange,
   onCenter,
-  onFileUpload,
 }) => {
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      onFileUpload(file);
-    }
-  };
-
   return (
-    <div className="flex flex-col space-y-4 p-4 border rounded-lg bg-white dark:bg-gray-900">
-      <div>
-        <input
-          type="file"
-          id="structure-upload"
-          className="hidden"
-          accept=".pdb,.cif,.ent,.gz"
-          onChange={handleFileChange}
-        />
-        <Button
-          variant="default"
-          onClick={() => document.getElementById('structure-upload')?.click()}
-          className="w-full flex items-center justify-center gap-2"
-        >
-          <Upload className="w-4 h-4" />
-          Upload Structure
-        </Button>
-      </div>
-
-      <div>
-        <Label className="text-sm font-medium mb-2 block">Representation</Label>
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-medium">Representation</Label>
+          <Button variant="outline" size="icon" onClick={onCenter}>
+            <Crosshair className="h-4 w-4" />
+            <span className="sr-only">Center view</span>
+          </Button>
+        </div>
         <Select value={viewerState.viewMode} onValueChange={(value) => onViewModeChange(value as ViewMode)}>
           <SelectTrigger>
             <SelectValue placeholder="Select representation" />
@@ -68,38 +48,49 @@ export const ViewControls: React.FC<ViewControlsProps> = ({
         </Select>
       </div>
 
-      <div>
-        <Label className="text-sm font-medium mb-2 block">Atom Size</Label>
+      <Separator />
+
+      <div className="space-y-4">
+        <Label className="text-sm font-medium">Atom Size</Label>
         <Slider
           value={[viewerState.atomSize]}
           min={0.1}
           max={3}
           step={0.1}
           onValueChange={value => onAtomSizeChange(value[0])}
+          className="py-2"
         />
       </div>
 
-      <div className="flex items-center space-x-2">
-        <Checkbox
-          id="ligand"
-          checked={viewerState.showLigand}
-          onCheckedChange={(checked) => onLigandVisibilityChange(checked as boolean)}
-        />
-        <Label htmlFor="ligand">Show Ligand</Label>
-      </div>
+      <Separator />
 
-      <div className="flex items-center space-x-2">
-        <Checkbox
-          id="water-ion"
-          checked={viewerState.showWaterIon}
-          onCheckedChange={(checked) => onWaterIonVisibilityChange(checked as boolean)}
-        />
-        <Label htmlFor="water-ion">Show Water + Ion</Label>
+      <div className="space-y-4">
+        <Label className="text-sm font-medium">Visibility</Label>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="show-ligand" className="text-sm">
+              Show Ligand
+            </Label>
+            <Switch
+              id="show-ligand"
+              checked={viewerState.showLigand}
+              onCheckedChange={onLigandVisibilityChange}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="show-water-ion" className="text-sm">
+              Show Water + Ion
+            </Label>
+            <Switch
+              id="show-water-ion"
+              checked={viewerState.showWaterIon}
+              onCheckedChange={onWaterIonVisibilityChange}
+            />
+          </div>
+        </div>
       </div>
-
-      <Button variant="outline" onClick={onCenter} className="w-full">
-        Center View
-      </Button>
     </div>
   );
 };
+
+export default ViewControls;

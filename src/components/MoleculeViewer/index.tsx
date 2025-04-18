@@ -76,7 +76,7 @@ export function MoleculeViewer() {
     <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900 p-4 md:p-8">
       <header className="mb-8">
         <h1 className="text-4xl font-bold text-center bg-gradient-to-r from-purple-500 to-blue-500 bg-clip-text text-transparent">
-          ESMFold Lite
+          LiteFold
         </h1>
         <p className="text-center text-gray-600 dark:text-gray-400 mt-2">
           Upload and visualize 3D molecular structures from PDB files

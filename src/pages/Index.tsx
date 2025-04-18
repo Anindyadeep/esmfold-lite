@@ -93,95 +93,105 @@ const Index = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900 p-4 md:p-8">
-      <header className="mb-8">
-        <h1 className="text-4xl font-bold text-center bg-gradient-to-r from-purple-500 to-blue-500 bg-clip-text text-transparent">
-          ESMFold lite
-        </h1>
-        <p className="text-center text-gray-600 dark:text-gray-400 mt-2">
-          Upload and visualize 3D molecular structures from PDB files
-        </p>
+    <div className="flex flex-col min-h-screen bg-background">
+      <header className="border-b bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/50">
+        <div className="container flex h-16 items-center gap-4 px-6">
+          <h1 className="text-xl font-semibold tracking-tight">
+            LiteFold
+          </h1>
+          <p className="text-sm text-muted-foreground ml-4">
+            Molecular Structure Visualization
+          </p>
+        </div>
       </header>
       
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-3 space-y-6">
-          <Card className="p-4">
-            <h2 className="text-xl font-semibold mb-4">Upload Files</h2>
-            <FileUploader onFilesUploaded={handleFilesUploaded} />
-            <FileList 
-              files={files}
-              onDelete={handleDeleteFile}
-              onSelect={setSelectedFileIndex}
-              selectedIndex={selectedFileIndex}
-            />
-          </Card>
-          
-          <Card className="p-4">
-            <h2 className="text-xl font-semibold mb-4">View Settings</h2>
-            <ViewControls 
-              viewerState={viewerState}
-              onAtomSizeChange={handleAtomSizeChange}
-              onLigandVisibilityChange={handleLigandVisibilityChange}
-              onWaterIonVisibilityChange={handleWaterIonVisibilityChange}
-              onViewModeChange={handleViewModeChange}
-              onCenter={() => {}}
-              onFileUpload={(file) => handleFilesUploaded([file])}
-            />
-          </Card>
-        </div>
-        
-        <div className="lg:col-span-9">
-          <Card className="h-[600px] p-0 overflow-hidden">
-            <NGLViewer 
-              structures={loadedStructures}
-              viewerState={viewerState}
-            />
-          </Card>
-          
-          {selectedFileIndex !== null && files[selectedFileIndex]?.molecule && (
-            <Card className="mt-6 p-4">
-              <Tabs defaultValue="info">
-                <TabsList>
-                  <TabsTrigger value="info">Molecule Info</TabsTrigger>
-                  <TabsTrigger value="stats">Statistics</TabsTrigger>
-                </TabsList>
-                <TabsContent value="info" className="p-4">
-                  <h3 className="text-lg font-medium">{files[selectedFileIndex].file.name}</h3>
-                  <Separator className="my-2" />
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-500">File Name</p>
-                      <p className="font-medium">{files[selectedFileIndex].file.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Atom Count</p>
-                      <p className="font-medium">{files[selectedFileIndex].molecule?.atoms.length}</p>
-                    </div>
-                  </div>
-                </TabsContent>
-                <TabsContent value="stats" className="p-4">
-                  <h3 className="text-lg font-medium">Element Distribution</h3>
-                  <Separator className="my-2" />
-                  <div className="max-h-40 overflow-y-auto">
-                    {Object.entries(
-                      files[selectedFileIndex].molecule?.atoms.reduce<Record<string, number>>((acc, atom) => {
-                        const element = atom.element.trim();
-                        acc[element] = (acc[element] || 0) + 1;
-                        return acc;
-                      }, {}) || {}
-                    ).map(([element, count]) => (
-                      <div key={element} className="flex justify-between py-1">
-                        <span>{element || 'Unknown'}</span>
-                        <span className="font-medium">{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </TabsContent>
-              </Tabs>
+      <main className="flex-1 overflow-hidden">
+        <div className="container flex gap-6 p-6 h-[calc(100vh-4rem)]">
+          <div className="w-80 flex flex-col gap-6">
+            <Card className="p-5">
+              <h2 className="text-lg font-medium mb-4">Upload Files</h2>
+              <FileUploader onFilesUploaded={handleFilesUploaded} />
+              <div className="mt-4">
+                <FileList 
+                  files={files}
+                  onDelete={handleDeleteFile}
+                  onSelect={setSelectedFileIndex}
+                  selectedIndex={selectedFileIndex}
+                />
+              </div>
             </Card>
-          )}
+            
+            <Card className="p-5 flex-shrink-0">
+              <h2 className="text-lg font-medium mb-4">View Settings</h2>
+              <ViewControls 
+                viewerState={viewerState}
+                onAtomSizeChange={handleAtomSizeChange}
+                onLigandVisibilityChange={handleLigandVisibilityChange}
+                onWaterIonVisibilityChange={handleWaterIonVisibilityChange}
+                onViewModeChange={handleViewModeChange}
+                onCenter={() => {}}
+              />
+            </Card>
+          </div>
+          
+          <div className="flex-1 flex flex-col gap-6 min-h-[600px]">
+            <Card className="flex-1 p-0 overflow-hidden rounded-lg border bg-card shadow-sm min-h-[600px] relative">
+              <NGLViewer 
+                structures={loadedStructures}
+                viewerState={viewerState}
+              />
+            </Card>
+            
+            {selectedFileIndex !== null && files[selectedFileIndex]?.molecule && (
+              <Card className="p-5 flex-shrink-0">
+                <Tabs defaultValue="info" className="w-full">
+                  <TabsList className="w-full justify-start">
+                    <TabsTrigger value="info">Molecule Info</TabsTrigger>
+                    <TabsTrigger value="stats">Statistics</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="info" className="mt-4">
+                    <div className="grid gap-4">
+                      <div className="space-y-1">
+                        <h3 className="text-sm font-medium leading-none">
+                          {files[selectedFileIndex].file.name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Structure details and information
+                        </p>
+                      </div>
+                      <Separator />
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-1">
+                          <p className="text-sm text-muted-foreground">File Name</p>
+                          <p className="text-sm font-medium">{files[selectedFileIndex].file.name}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm text-muted-foreground">Atom Count</p>
+                          <p className="text-sm font-medium">{files[selectedFileIndex].molecule?.atoms.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="stats" className="mt-4">
+                    <div className="grid gap-4">
+                      <div className="space-y-1">
+                        <h3 className="text-sm font-medium leading-none">
+                          Statistical Analysis
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Detailed statistics about the molecular structure
+                        </p>
+                      </div>
+                      <Separator />
+                      {/* Add your statistics content here */}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </Card>
+            )}
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

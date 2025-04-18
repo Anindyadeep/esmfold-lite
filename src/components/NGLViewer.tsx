@@ -55,10 +55,14 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
       quality: 'high',
       impostor: true,
       camera: 'perspective',
-      clipNear: 0,
-      clipFar: 100,
-      fogNear: 50,
-      fogFar: 100,
+      clipNear: 1,
+      clipFar: 10000,
+      fogNear: 100,
+      fogFar: 1000,
+      cameraType: 'perspective',
+      cameraFov: 40,
+      cameraEyeSep: 0.3,
+      sampleLevel: 0,
     });
 
     // Register custom color scheme
@@ -66,7 +70,10 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
 
     // Handle window resizing
     const handleResize = () => {
-      stageRef.current?.handleResize();
+      if (stageRef.current) {
+        stageRef.current.handleResize();
+        stageRef.current.viewer.requestRender();
+      }
     };
     window.addEventListener('resize', handleResize);
 
@@ -117,7 +124,14 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
 
         // Center view if any structures are loaded
         if (structures.length > 0) {
+          // Set initial camera position
+          const viewer = stageRef.current.viewer;
+          viewer.setCamera('perspective');
+          viewer.setCameraPosition([0, 0, 100]);
+          
+          // Center and zoom with animation
           stageRef.current.autoView(1000);
+          stageRef.current.animationControls.rotate([ 0, 1, 0 ], 0.1);
         }
       } catch (error) {
         console.error('Error loading structures:', error);
@@ -194,7 +208,13 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
     <div 
       ref={containerRef}
       className="w-full h-full rounded-lg overflow-hidden"
-      style={{ minHeight: '600px' }}
+      style={{ 
+        minHeight: '600px',
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
     />
   );
 });
