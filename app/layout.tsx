@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const plusJakarta = Plus_Jakarta_Sans({ 
+  subsets: ["latin"], 
+  variable: "--font-heading",
+});
 
 export const metadata: Metadata = {
   title: "ESMFold Lite",
@@ -20,11 +24,12 @@ export default function RootLayout({
       <body
         className={cn(
           "min-h-screen bg-background font-sans antialiased",
-          inter.variable
+          inter.variable,
+          plusJakarta.variable
         )}
       >
         <div className="relative flex min-h-screen flex-col">
-          <main className="container mx-auto flex-1 space-y-4 p-8">
+          <main className="container mx-auto flex-1 space-y-6 px-4 py-8 md:px-8 lg:py-12">
             {children}
           </main>
         </div>
