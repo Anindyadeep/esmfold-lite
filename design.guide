@@ -1,0 +1,110 @@
+## 1. **Technology Stack**
+
+| Layer | Tech |
+|-------|------|
+| **Frontend Framework** | Next.js + React (TypeScript) |
+| **Styling** | Tailwind CSS (utility-first, tokenized) |
+| **Build Tool** | Vite |
+| **UI Library** | Shadcn UI (customizable headless components) |
+| **Animation** | `tailwindcss-animate` plugin |
+
+---
+
+## 2. **Core Design Principles**
+
+- **Consistency:** Shared design tokens and base components ensure visual and behavioral consistency across the app.
+- **Scalability:** Modular architecture supports seamless feature growth and team collaboration.
+- **Accessibility (a11y):** Semantic color usage, focus states, and ARIA-ready components.
+- **Themeability:** Dynamic theme variables support enterprise-level branding and client-specific customization.
+
+---
+
+## 3. **Design Tokens & Theming**
+
+| Token Type | Description |
+|------------|-------------|
+| **Color System** | HSL-based palette, scoped under `:root` for light/dark modes |
+| **Spacing** | Tailwind spacing scale (`px`, `0.5`, `1`, `2`, etc.) |
+| **Border Radius** | Tiered system: `lg`, `md`, `sm` |
+| **Shadows** | Leverages Tailwind’s depth system, with room for custom elevation |
+| **Typography** | Responsive text scaling, fluid line-height, customizable font stack |
+
+### Color System
+| Category | Examples |
+|---------|----------|
+| **Primary** | HSL based, theme-aware |
+| **Accent** | Magenta, Orange, Teal, Purple |
+| **Feedback** | `destructive`, `muted`, `success`, `warning` |
+| **Dark Mode** | Fully supported with token inversion using Tailwind and CSS variables |
+
+---
+
+## 4. **Component System**
+
+### Base Elements
+- **Buttons**
+  - Sizes: `sm`, `md`, `lg`
+  - Variants: `primary`, `secondary`, `outline`, `destructive`
+- **Inputs & Forms**
+  - Built with accessibility in mind
+  - Supports validation, loading, and disabled states
+- **Typography**
+  - Controlled via `@tailwind/typography`
+
+### Composable UI Patterns
+- **Cards**
+- **Modals**
+- **Accordions** (with animated transitions)
+- **Popovers & Tooltips**
+- **Sidebars & Drawers**
+
+### Utility Components
+- Skeletons, Loaders, Progress Bars
+- Badges, Tags, Pills
+- Tabs, Toasts, Toggles
+
+All components are designed for **reusability and extendability** via Tailwind utility extensions and `shadcn/ui` primitives.
+
+---
+
+## 5. **Layout System**
+
+- **Container-first Design:** Max width of `1400px`, centered content
+- **Grid-ready:** Tailwind’s `grid`, `flex`, and `container` utilities for responsive layouts
+- **Padding Standardization:** `2rem` horizontal container padding
+- **Header/Footer Anchors:** Space reserved for fixed or sticky nav structures
+
+---
+
+## 6. **Responsiveness**
+
+- **Breakpoints:** Tailwind defaults (`sm`, `md`, `lg`, `xl`, `2xl`)
+- **Container Queries:** For advanced, layout-specific adjustments
+- **Mobile-first:** Designed from smallest screen up
+
+---
+
+## 7. **Animation & Interaction**
+
+- **Subtle motion for clarity, not flair**
+- **Accordion transitions** using `tailwindcss-animate`
+- **Custom easing and duration tokens** for standardized transitions
+
+---
+
+## 8. **Special Features**
+
+- **Dark/Light Mode Support** (CSS variables with Tailwind’s `dark:` class)
+- **Molecule-specific Color Themes** for product verticals or features
+- **Custom Sidebar Themes** with contextual navigation patterns
+- **Global CSS Reset** (via `@layer base` in `globals.css`)
+
+---
+
+## 9. **Developer Experience (DX)**
+
+- **Scalable Theming:** Brands can inject theme via config
+- **Atomic Composition:** Encouraged to keep components small and stateless
+- **CLI-ready Component Scaffolding** (if `shadcn/ui` generator is wired)
+- **Type-safe Tailwind (via twin.macro / class-variance-authority)** if included
+

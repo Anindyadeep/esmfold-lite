@@ -11,6 +11,7 @@ import { useVisualizeStore } from '@/store/visualizeStore';
 import { ViewMode, ColorScheme } from '@/types/viewer';
 import { JobSelector } from '@/components/JobSelector';
 import { Badge } from '@/components/ui/badge';
+import { Distogram } from '@/components/Distogram';
 
 interface MoleculeStats {
   totalAtoms: number;
@@ -222,6 +223,7 @@ export default function Visualize() {
             <TabsList className="w-full justify-start">
               <TabsTrigger value="info">Structure Info</TabsTrigger>
               <TabsTrigger value="stats">Statistics</TabsTrigger>
+              <TabsTrigger value="distogram">Distogram</TabsTrigger>
             </TabsList>
             <TabsContent value="info" className="mt-4">
               <div className="grid gap-4">
@@ -235,8 +237,12 @@ export default function Visualize() {
                 </div>
                 <Separator />
                 <div className="space-y-4">
-                  {loadedStructures.map(structure => (
-                    <div key={structure.id} className="flex items-center justify-between">
+                  {loadedStructures.map((structure, index) => (
+                    <div 
+                      key={structure.id} 
+                      className={`flex items-center justify-between p-2 rounded-lg cursor-pointer ${index === selectedFileIndex ? 'bg-accent' : ''}`}
+                      onClick={() => setSelectedFileIndex(index)}
+                    >
                       <div>
                         <p className="font-medium">{structure.name}</p>
                         <p className="text-sm text-muted-foreground">
@@ -254,90 +260,95 @@ export default function Visualize() {
               </div>
             </TabsContent>
             <TabsContent value="stats" className="mt-4">
-              {structureStats.length > 0 ? (
+              {selectedFileIndex !== null && loadedStructures[selectedFileIndex]?.molecule ? (
                 <div className="space-y-8">
-                  {structureStats.map(({ id, name, source, stats }) => (
-                    <div key={id} className="space-y-6">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-medium">{name}</h3>
-                        <Badge variant={source === 'file' ? "outline" : "secondary"}>
-                          {source === 'file' ? 'File' : 'Job'}
-                        </Badge>
-                      </div>
-                      
-                      {/* Atom Statistics */}
-                      <div>
-                        <h4 className="text-sm font-medium mb-2">Atom Statistics</h4>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <p className="text-muted-foreground">Total Atoms</p>
-                            <p className="font-medium">{stats.totalAtoms}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Unique Elements</p>
-                            <p className="font-medium">{stats.uniqueElements.join(', ')}</p>
-                          </div>
+                  {(() => {
+                    const structure = loadedStructures[selectedFileIndex];
+                    const stats = calculateMoleculeStats(structure.molecule!);
+                    return (
+                      <div key={structure.id} className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-medium">{structure.name}</h3>
+                          <Badge variant={structure.source === 'file' ? "outline" : "secondary"}>
+                            {structure.source === 'file' ? 'File' : 'Job'}
+                          </Badge>
                         </div>
-                      </div>
-
-                      <Separator />
-
-                      {/* Chain Information */}
-                      <div>
-                        <h4 className="text-sm font-medium mb-2">Chain Information</h4>
-                        <div className="grid grid-cols-4 gap-4 text-sm font-medium mb-2">
-                          <div>Chain</div>
-                          <div>Residues</div>
-                          <div>Atoms</div>
-                          <div>% of Total</div>
-                        </div>
-                        {stats.chainInfo.map(chain => (
-                          <div key={chain.chainId} className="grid grid-cols-4 gap-4 text-sm">
-                            <div>{chain.chainId}</div>
-                            <div>{chain.residueCount}</div>
-                            <div>{chain.atomCount}</div>
+                        
+                        {/* Atom Statistics */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-2">Atom Statistics</h4>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                              {((chain.atomCount / stats.totalAtoms) * 100).toFixed(1)}%
+                              <p className="text-muted-foreground">Total Atoms</p>
+                              <p className="font-medium">{stats.totalAtoms}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Unique Elements</p>
+                              <p className="font-medium">{stats.uniqueElements.join(', ')}</p>
                             </div>
                           </div>
-                        ))}
-                      </div>
-
-                      <Separator />
-
-                      {/* Water and Ion Information */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="p-3 rounded-lg bg-muted/50">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-blue-500">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 2v1m0 18v1M4.93 4.93l.7.7m12.74 12.74l.7.7M2 12h1m18 0h1M4.93 19.07l.7-.7m12.74-12.74l.7-.7" />
-                              </svg>
-                            </span>
-                            <p className="font-medium">Water Molecules</p>
-                          </div>
-                          <p className="text-muted-foreground">{stats.waterCount} molecules</p>
                         </div>
-                        <div className="p-3 rounded-lg bg-muted/50">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-purple-500">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10" />
-                                <circle cx="12" cy="12" r="4" />
-                              </svg>
-                            </span>
-                            <p className="font-medium">Ions</p>
+
+                        <Separator />
+
+                        {/* Chain Information */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-2">Chain Information</h4>
+                          <div className="grid grid-cols-4 gap-4 text-sm font-medium mb-2">
+                            <div>Chain</div>
+                            <div>Residues</div>
+                            <div>Atoms</div>
+                            <div>% of Total</div>
                           </div>
-                          <p className="text-muted-foreground">{stats.ionCount} ions</p>
+                          {stats.chainInfo.map(chain => (
+                            <div key={chain.chainId} className="grid grid-cols-4 gap-4 text-sm">
+                              <div>{chain.chainId}</div>
+                              <div>{chain.residueCount}</div>
+                              <div>{chain.atomCount}</div>
+                              <div>
+                                {((chain.atomCount / stats.totalAtoms) * 100).toFixed(1)}%
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <Separator />
+
+                        {/* Water and Ion Information */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-2">Water and Ion Content</h4>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="text-muted-foreground">Water Molecules</p>
+                              <p className="font-medium">{stats.waterCount}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Ion Count</p>
+                              <p className="font-medium">{stats.ionCount}</p>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })()}
                 </div>
               ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  <h3 className="text-xl font-semibold mb-2">No Structures Loaded</h3>
-                  <p>Upload files or select jobs to view statistics</p>
+                <div className="text-center py-8 text-muted-foreground">
+                  Select a structure to view its statistics
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="distogram" className="mt-4">
+              {selectedFileIndex !== null && loadedStructures[selectedFileIndex]?.molecule ? (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium">{loadedStructures[selectedFileIndex].name} - Distogram</h3>
+                  </div>
+                  <Distogram molecule={loadedStructures[selectedFileIndex].molecule!} />
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Select a structure to view its distogram
                 </div>
               )}
             </TabsContent>

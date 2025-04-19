@@ -1,6 +1,8 @@
 import type { Config } from "tailwindcss";
+import { fontFamily } from "tailwindcss/defaultTheme";
+import animatePlugin from "tailwindcss-animate";
 
-export default {
+const config = {
 	darkMode: ["class"],
 	content: [
 		"./pages/**/*.{ts,tsx}",
@@ -35,6 +37,14 @@ export default {
     			destructive: {
     				DEFAULT: 'hsl(var(--destructive))',
     				foreground: 'hsl(var(--destructive-foreground))'
+    			},
+    			success: {
+    				DEFAULT: 'hsl(var(--success))',
+    				foreground: 'hsl(var(--success-foreground))'
+    			},
+    			warning: {
+    				DEFAULT: 'hsl(var(--warning))',
+    				foreground: 'hsl(var(--warning-foreground))'
     			},
     			muted: {
     				DEFAULT: 'hsl(var(--muted))',
@@ -78,9 +88,12 @@ export default {
     			}
     		},
     		borderRadius: {
-    			lg: 'var(--radius)',
-    			md: 'calc(var(--radius) - 2px)',
-    			sm: 'calc(var(--radius) - 4px)'
+    			lg: 'var(--radius-lg)',
+    			md: 'var(--radius-md)',
+    			sm: 'var(--radius-sm)'
+    		},
+    		fontFamily: {
+    			sans: ["var(--font-sans)", ...fontFamily.sans],
     		},
     		keyframes: {
     			'accordion-down': {
@@ -106,5 +119,7 @@ export default {
     		}
     	}
     },
-	plugins: [require("tailwindcss-animate")],
+	plugins: [animatePlugin],
 } satisfies Config;
+
+export default config;
