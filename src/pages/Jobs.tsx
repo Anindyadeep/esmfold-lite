@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 
 const proteinExamples = [
   {
@@ -50,7 +51,8 @@ export default function Jobs() {
     setFormData, 
     submitJob, 
     fetchJobs,
-    updateJobStatus 
+    updateJobStatus,
+    deleteJob 
   } = useJobsStore();
 
   // Get the current user's session
@@ -238,6 +240,7 @@ export default function Jobs() {
                 <TableHead>Status</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Completed</TableHead>
+                <TableHead className="w-[50px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -254,6 +257,20 @@ export default function Jobs() {
                   </TableCell>
                   <TableCell>{formatDate(job.created_at)}</TableCell>
                   <TableCell>{job.completed_at ? formatDate(job.completed_at) : '-'}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 p-0 hover:text-destructive"
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to delete this job?')) {
+                          deleteJob(job.job_id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

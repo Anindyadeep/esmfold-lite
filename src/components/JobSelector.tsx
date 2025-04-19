@@ -24,7 +24,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-const API_BASE_URL = "https://f4dd-194-105-248-9.ngrok-free.app";
+const API_BASE_URL = "https://ebbf-194-105-248-9.ngrok-free.app";
 
 interface JobResponse {
   job_id: string;
@@ -74,7 +74,12 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
         }
         jobDetails = await response.json();
       } else {
-        jobDetails = job as JobResponse;
+        jobDetails = {
+          ...job,
+          status: 'completed',
+          error_message: null,
+          user_id: '',
+        } as JobResponse;
       }
 
       if (!jobDetails.pdb_content) {
@@ -93,8 +98,9 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
       console.log('Parsed molecule for job:', jobDetails.job_id, molecule);
       
       // Add the structure to the store with all metadata
+      // Use the job_id as the unique identifier to ensure multiple jobs work correctly
       addLoadedStructures([{
-        id: jobDetails.job_id,
+        id: `job-${jobDetails.job_id}`, // Make sure each job has a unique ID prefixed
         name: jobDetails.job_name,
         pdbData: jobDetails.pdb_content,
         source: 'job',
@@ -122,7 +128,7 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
       // Clean up by removing all job structures when component unmounts
       selectedJobs.forEach(job => {
         console.log('Removing structure for job:', job.job_id);
-        removeStructureById(job.job_id);
+        removeStructureById(`job-${job.job_id}`);
       });
     };
   }, [selectedJobs, removeStructureById]);
@@ -132,7 +138,8 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
       const isSelected = current.some(j => j.job_id === job.job_id);
       if (isSelected) {
         console.log('Removing job:', job.job_id);
-        removeStructureById(job.job_id);
+        // Use the same prefixed ID format for removing
+        removeStructureById(`job-${job.job_id}`);
         return current.filter(j => j.job_id !== job.job_id);
       } else {
         console.log('Adding job:', job.job_id);
@@ -213,7 +220,7 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
                 placeholder="Search jobs..." 
                 className="h-11 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onValueChange={setSearchQuery}
               />
             </div>
             <CommandList>

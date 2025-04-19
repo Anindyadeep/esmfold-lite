@@ -29,6 +29,7 @@ interface JobsState {
   submitJob: () => Promise<void>;
   fetchJobs: () => Promise<void>;
   updateJobStatus: (jobId: string) => Promise<void>;
+  deleteJob: (jobId: string) => Promise<void>;
 }
 
 const initialFormData: JobFormData = {
@@ -38,7 +39,7 @@ const initialFormData: JobFormData = {
   selectedModel: "ESMFold",
 };
 
-const API_BASE_URL = "https://f4dd-194-105-248-9.ngrok-free.app";
+const API_BASE_URL = "https://ebbf-194-105-248-9.ngrok-free.app";
 
 export const useJobsStore = create<JobsState>((set, get) => ({
   jobs: [],
@@ -187,6 +188,41 @@ export const useJobsStore = create<JobsState>((set, get) => ({
       get().fetchJobs();
     } catch (error) {
       console.error('Error updating job status:', error);
+    }
+  },
+
+  deleteJob: async (jobId: string) => {
+    try {
+      // Get current user
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        throw new Error('You must be logged in to delete jobs');
+      }
+
+      // Delete job from Supabase
+      const { error: dbError } = await supabase
+        .from('litefold-jobs')
+        .delete()
+        .eq('job_id', jobId)
+        .eq('user_id', user.id);  // Only delete if job belongs to user
+
+      if (dbError) throw dbError;
+
+      // Update local state
+      set(state => ({
+        jobs: state.jobs.filter(job => job.job_id !== jobId)
+      }));
+
+      // Show success message
+      setTimeout(() => {
+        toast.success('Job deleted successfully');
+      }, 0);
+    } catch (error) {
+      console.error('Error deleting job:', error);
+      setTimeout(() => {
+        toast.error(`Failed to delete job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }, 0);
     }
   },
 })); 

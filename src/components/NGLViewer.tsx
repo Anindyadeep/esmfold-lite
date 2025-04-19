@@ -3,7 +3,12 @@ import * as NGL from 'ngl';
 import { ViewerState } from '@/types/viewer';
 
 interface NGLViewerProps {
-  structures: { id: string; pdbData: string }[];
+  structures: { 
+    id: string; 
+    pdbData: string;
+    name?: string;
+    source?: 'file' | 'job';
+  }[];
   viewerState: ViewerState;
 }
 
@@ -16,7 +21,11 @@ const STRUCTURE_COLORS = [
   0x00BEB7, // Teal
   0x7700BE, // Purple
   0xBEB700, // Yellow
-  0x00BE77  // Mint
+  0x00BE77, // Mint
+  0xFF5733, // Coral
+  0x339CFF, // Sky Blue
+  0xCC33FF, // Lavender
+  0x33FF57  // Lime
 ];
 
 // Color scheme definitions
@@ -33,8 +42,12 @@ const COLOR_SCHEMES = {
 // Get color scheme parameters based on the selected scheme
 const getColorSchemeParams = (scheme: string, structureIndex: number = 0) => {
   if (scheme === COLOR_SCHEMES.DEFAULT) {
+    // Always use a unique color for each structure based on index
+    const colorIndex = structureIndex % STRUCTURE_COLORS.length;
+    const color = STRUCTURE_COLORS[colorIndex];
+    console.log(`Assigned color ${color.toString(16)} to structure index ${structureIndex}`);
     return {
-      color: STRUCTURE_COLORS[structureIndex % STRUCTURE_COLORS.length]
+      color: color
     };
   }
 
@@ -77,12 +90,11 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
       "data", new NGL.StaticDatasource("//cdn.rawgit.com/arose/ngl/v2.0.0-dev.32/data/")
     );
 
-    // Initialize NGL Stage with better quality settings
+    // Initialize NGL Stage with better quality settings - removed invalid 'camera' property
     stageRef.current = new NGL.Stage(containerRef.current, {
       backgroundColor: 'white',
       quality: 'high',
       impostor: true,
-      camera: 'perspective',
       clipNear: 1,
       clipFar: 10000,
       fogNear: 100,
@@ -108,145 +120,176 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
     };
   }, []);
 
-  // Handle structures changes
+  // Handle structures changes - improved to handle individual structure changes
   useEffect(() => {
-    console.log('Structures changed:', structures); // Debug log
+    if (!stageRef.current) {
+      console.error('Stage not initialized');
+      return;
+    }
 
-    const loadStructures = async () => {
-      if (!stageRef.current) {
-        console.error('Stage not initialized'); // Debug log
-        return;
-      }
+    // Log detailed structure information for debugging
+    console.log('Structures changed:', structures.length, 
+      structures.map(s => ({ id: s.id, name: s.name || s.id, source: s.source || 'unknown' })));
 
+    // Track current structures and previously loaded ones
+    const currentStructureIds = new Set(structures.map(s => s.id));
+    const previousStructureIds = new Set(loadedStructuresRef.current.keys());
+    
+    const processStructures = async () => {
       try {
-        // Remove all existing components and clear the map
-        stageRef.current.removeAllComponents();
-        loadedStructuresRef.current.clear();
-
-        console.log('Loading structures:', structures.length); // Debug log
-
-        // Load each structure
-        for (let i = 0; i < structures.length; i++) {
-          const { id, pdbData } = structures[i];
-          console.log('Loading structure:', id); // Debug log
-
-          try {
-            // Load new structure
-            const blob = new Blob([pdbData], { type: 'text/plain' });
-            const structure = await stageRef.current.loadFile(blob, { ext: 'pdb' });
-            loadedStructuresRef.current.set(id, structure);
-            console.log('Structure loaded:', id); // Debug log
-
-            // Add representations
-            updateRepresentation(structure, i);
-            console.log('Representation updated:', id); // Debug log
-          } catch (error) {
-            console.error('Error loading individual structure:', id, error);
+        // 1. Remove structures that are no longer in the list
+        for (const id of previousStructureIds) {
+          if (!currentStructureIds.has(id)) {
+            console.log('Removing structure:', id);
+            const component = loadedStructuresRef.current.get(id);
+            if (component) {
+              stageRef.current.removeComponent(component);
+              loadedStructuresRef.current.delete(id);
+            }
           }
         }
-
-        // Center view if any structures are loaded
-        if (structures.length > 0) {
-          console.log('Centering view'); // Debug log
+        
+        // 2. Load new structures and update existing ones
+        for (let i = 0; i < structures.length; i++) {
+          const structure = structures[i];
+          const { id, pdbData } = structure;
+          const source = structure.source || 'unknown';
+          
+          // Check if the structure is already loaded
+          if (loadedStructuresRef.current.has(id)) {
+            // Just update the representation
+            const component = loadedStructuresRef.current.get(id);
+            if (component) {
+              // Set structureIndex to ensure each structure gets a unique color
+              updateRepresentation(component, i);
+              console.log(`Updated representation for existing structure: ${id} (index: ${i})`);
+            }
+          } else {
+            // Load new structure
+            console.log(`Loading new structure: ${id} (index: ${i}, source: ${source})`);
+            try {
+              // Determine file extension
+              const fileExt = id.toLowerCase().split('.').pop() || 'pdb';
+              const ext = fileExt === 'cif' ? 'cif' : 'pdb';
+              
+              // Create a blob and load it
+              const blob = new Blob([pdbData], { type: 'text/plain' });
+              const component = await stageRef.current.loadFile(blob, { ext });
+              
+              // Store reference and add representations
+              loadedStructuresRef.current.set(id, component);
+              updateRepresentation(component, i);
+              console.log(`Loaded new structure: ${id} with index ${i}`);
+            } catch (error) {
+              console.error('Error loading structure:', id, error);
+            }
+          }
+        }
+        
+        // 3. Auto-view all structures if we have any
+        if (loadedStructuresRef.current.size > 0) {
           stageRef.current.autoView(1000);
+          console.log('Auto-centered view on', loadedStructuresRef.current.size, 'structures');
         }
       } catch (error) {
-        console.error('Error loading structures:', error);
+        console.error('Error processing structures:', error);
       }
     };
-
-    const updateRepresentation = (structure: any, structureIndex: number) => {
-      try {
-        // Remove existing representations
-        structure.removeAllRepresentations();
-
-        // Get color scheme parameters
-        const colorParams = getColorSchemeParams(COLOR_SCHEMES[viewerState.colorScheme] || COLOR_SCHEMES.DEFAULT, structureIndex);
-
-        // Add main representation based on viewMode
-        switch (viewerState.viewMode) {
-          case 'cartoon':
-            structure.addRepresentation('cartoon', {
-              name: "polymer",
-              sele: "polymer",
-              quality: 'high',
-              aspectRatio: 2.0,
-              scale: viewerState.atomSize,
-              smoothSheet: true,
-              ...colorParams
-            });
-            break;
-          case 'spacefill':
-            structure.addRepresentation('spacefill', {
-              name: "polymer",
-              sele: "polymer",
-              quality: 'high',
-              scale: viewerState.atomSize,
-              ...colorParams
-            });
-            break;
-          case 'licorice':
-            structure.addRepresentation('licorice', {
-              name: "polymer",
-              sele: "polymer",
-              quality: 'high',
-              scale: viewerState.atomSize,
-              ...colorParams
-            });
-            break;
-          case 'surface':
-            structure.addRepresentation('surface', {
-              name: "polymer",
-              sele: "polymer",
-              quality: 'high',
-              scale: viewerState.atomSize,
-              surfaceType: 'vws',
-              opacity: 0.85,
-              ...colorParams
-            });
-            break;
-        }
-
-        // Add ligand representation if enabled
-        if (viewerState.showLigand) {
-          structure.addRepresentation("ball+stick", {
-            name: "ligand",
-            visible: true,
-            sele: "not ( polymer or water or ion )",
-            quality: 'high',
-            aspectRatio: 1.5,
-            scale: viewerState.atomSize * 1.2,
-            bondScale: viewerState.atomSize * 0.3,
-            bondSpacing: 1.0,
-            colorScheme: 'element'
-          });
-        }
-
-        // Add water/ion representation if enabled
-        if (viewerState.showWaterIon) {
-          structure.addRepresentation("spacefill", {
-            name: "waterIon",
-            visible: true,
-            sele: "water or ion",
-            scale: viewerState.atomSize * 0.25,
-            quality: 'high',
-            colorScheme: 'element'
-          });
-        }
-      } catch (error) {
-        console.error('Error updating representation:', error);
-      }
-    };
-
-    loadStructures();
+    
+    processStructures();
   }, [structures, viewerState]);
+  
+  const updateRepresentation = (structure: any, structureIndex: number) => {
+    try {
+      // Remove existing representations
+      structure.removeAllRepresentations();
+
+      // Get color scheme parameters
+      const colorParams = getColorSchemeParams(COLOR_SCHEMES[viewerState.colorScheme] || COLOR_SCHEMES.DEFAULT, structureIndex);
+
+      // Log the structure and color assignment for debugging
+      console.log(`Applying representation to structure index ${structureIndex} with color scheme:`, viewerState.colorScheme, colorParams);
+
+      // Add main representation based on viewMode
+      switch (viewerState.viewMode) {
+        case 'cartoon':
+          structure.addRepresentation('cartoon', {
+            name: "polymer",
+            sele: "polymer",
+            quality: 'high',
+            aspectRatio: 2.0,
+            scale: viewerState.atomSize,
+            smoothSheet: true,
+            ...colorParams
+          });
+          break;
+        case 'spacefill':
+          structure.addRepresentation('spacefill', {
+            name: "polymer",
+            sele: "polymer",
+            quality: 'high',
+            scale: viewerState.atomSize,
+            ...colorParams
+          });
+          break;
+        case 'licorice':
+          structure.addRepresentation('licorice', {
+            name: "polymer",
+            sele: "polymer",
+            quality: 'high',
+            scale: viewerState.atomSize,
+            ...colorParams
+          });
+          break;
+        case 'surface':
+          structure.addRepresentation('surface', {
+            name: "polymer",
+            sele: "polymer",
+            quality: 'high',
+            scale: viewerState.atomSize,
+            surfaceType: 'vws',
+            opacity: 0.85,
+            ...colorParams
+          });
+          break;
+      }
+
+      // Add ligand representation if enabled
+      if (viewerState.showLigand) {
+        structure.addRepresentation("ball+stick", {
+          name: "ligand",
+          visible: true,
+          sele: "not ( polymer or water or ion )",
+          quality: 'high',
+          aspectRatio: 1.5,
+          scale: viewerState.atomSize * 1.2,
+          bondScale: viewerState.atomSize * 0.3,
+          bondSpacing: 1.0,
+          colorScheme: 'element'
+        });
+      }
+
+      // Add water/ion representation if enabled
+      if (viewerState.showWaterIon) {
+        structure.addRepresentation("spacefill", {
+          name: "waterIon",
+          visible: true,
+          sele: "water or ion",
+          scale: viewerState.atomSize * 0.25,
+          quality: 'high',
+          colorScheme: 'element'
+        });
+      }
+    } catch (error) {
+      console.error('Error updating representation:', error);
+    }
+  };
 
   return (
     <div className="relative w-full h-full">
       <div
         ref={containerRef}
-        className="w-full h-full rounded-lg overflow-hidden"
-        style={{ minHeight: '600px' }}
+        className="absolute inset-0 w-full h-full rounded-lg overflow-hidden"
       />
     </div>
   );

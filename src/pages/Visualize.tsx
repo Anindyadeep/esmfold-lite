@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import FileUploader from '@/components/FileUploader';
 import FileList from '@/components/FileList';
 import { ViewControls } from '@/components/ViewControls';
@@ -13,7 +13,6 @@ import { JobSelector } from '@/components/JobSelector';
 import { Badge } from '@/components/ui/badge';
 import { Distogram } from '@/components/Distogram';
 import { Input } from '@/components/ui/input';
-import { useState, useEffect } from 'react';
 
 interface MoleculeStats {
   totalAtoms: number;
@@ -96,8 +95,15 @@ export default function Visualize() {
     setSelectedFileIndex,
     addLoadedStructures,
     setViewerState,
-    deleteFile
+    deleteFile,
+    getSelectedStructure
   } = useVisualizeStore();
+  
+  // Reference for the plot container
+  const plotRef = useRef<HTMLDivElement>(null);
+
+  // Get the currently selected structure
+  const selectedStructure = getSelectedStructure();
 
   // Calculate statistics for all loaded structures
   const structureStats = useMemo(() => {
@@ -112,6 +118,18 @@ export default function Visualize() {
       }));
   }, [loadedStructures]);
 
+  // Add an effect to log structure details for debugging
+  useEffect(() => {
+    if (loadedStructures.length > 0) {
+      console.log('Currently loaded structures:', loadedStructures.map(s => ({
+        id: s.id,
+        name: s.name,
+        source: s.source,
+        hasAtoms: s.molecule ? s.molecule.atoms.length : 0
+      })));
+    }
+  }, [loadedStructures]);
+
   // Process files when uploaded
   const handleFilesUploaded = async (newFiles: File[]) => {
     console.log('Files uploaded:', newFiles);
@@ -120,10 +138,19 @@ export default function Visualize() {
     const processedFiles = await Promise.all(newFiles.map(async (file) => {
       try {
         console.log('Processing file:', file.name);
-        const molecule = await parsePDB(file);
-        console.log('Parsed molecule:', molecule);
-        const pdbData = await file.text();
-        return { file, molecule, pdbData };
+        const fileData = await file.text();
+        
+        // For CIF files, we don't need to parse them as they'll be handled directly by NGL
+        const isCifFile = file.name.toLowerCase().endsWith('.cif');
+        const molecule = isCifFile ? null : await parsePDB(file);
+        
+        if (isCifFile) {
+          console.log('CIF file detected, skipping PDB parsing');
+        } else {
+          console.log('Parsed molecule:', molecule);
+        }
+        
+        return { file, molecule, pdbData: fileData };
       } catch (error) {
         console.error('Error processing file:', file.name, error);
         return { file, error };
@@ -175,12 +202,19 @@ export default function Visualize() {
     // Center view logic will be handled by NGLViewer component
   };
 
+  // Add a safe structure selection handler
+  const handleStructureSelect = (index: number) => {
+    if (index >= 0 && index < loadedStructures.length) {
+      setSelectedFileIndex(index);
+    }
+  };
+
   // Add debug logging for render
   console.log('Render state:', {
     filesCount: files.length,
+    loadedStructures: loadedStructures.length,
     selectedFileIndex,
-    hasMolecule: selectedFileIndex !== null ? !!files[selectedFileIndex]?.molecule : false,
-    hasStats: !!structureStats
+    selectedStructure: selectedStructure?.id || 'none'
   });
 
   return (
@@ -212,74 +246,62 @@ export default function Visualize() {
         </Card>
       </div>
         
-      <div className="col-span-9 flex flex-col gap-6">
-        <Card className="flex-1 p-0 overflow-hidden rounded-lg border bg-card shadow-sm min-h-[600px] relative">
-          <NGLViewer 
-            structures={loadedStructures}
-            viewerState={viewerState}
-          />
+      <div className="col-span-9 flex flex-col gap-4">
+        {/* 3D Viewer */}
+        <Card className="flex-1 p-0 overflow-hidden rounded-lg border bg-card shadow-sm relative aspect-square">
+          <div className="absolute inset-0">
+            <NGLViewer 
+              structures={loadedStructures}
+              viewerState={viewerState}
+            />
+          </div>
         </Card>
             
-        <Card className="p-5 flex-shrink-0">
-          <Tabs defaultValue="stats" className="w-full">
+        {/* Restore tabs but with Distogram first */}
+        <Card className="p-4">
+          <Tabs defaultValue="distogram" className="w-full">
             <TabsList className="w-full justify-start">
-              <TabsTrigger value="info">Structure Info</TabsTrigger>
-              <TabsTrigger value="stats">Statistics</TabsTrigger>
               <TabsTrigger value="distogram">Distogram</TabsTrigger>
+              <TabsTrigger value="stats">Statistics</TabsTrigger>
             </TabsList>
-            <TabsContent value="info" className="mt-4">
-              <div className="grid gap-4">
-                <div className="space-y-1">
-                  <h3 className="text-sm font-medium leading-none">
-                    Loaded Structures
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Currently loaded structures and their sources
-                  </p>
+            
+            {/* Distogram Tab */}
+            <TabsContent value="distogram" className="mt-4">
+              {selectedStructure?.molecule ? (
+                <div ref={plotRef} style={{ width: '100%', height: '450px' }}>
+                  <Distogram 
+                    molecule={selectedStructure.molecule!} 
+                    data={selectedStructure.metadata?.distogram}
+                    width={plotRef?.current?.offsetWidth || 600}
+                    height={450}
+                  />
                 </div>
-                <Separator />
-                <div className="space-y-4">
-                  {loadedStructures.map((structure, index) => (
-                    <div 
-                      key={structure.id} 
-                      className={`flex items-center justify-between p-2 rounded-lg cursor-pointer ${index === selectedFileIndex ? 'bg-accent' : ''}`}
-                      onClick={() => setSelectedFileIndex(index)}
-                    >
-                      <div>
-                        <p className="font-medium">{structure.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Source: {structure.source === 'file' ? 'Uploaded File' : 'Job'}
-                        </p>
-                      </div>
-                      {structure.molecule && (
-                        <p className="text-sm text-muted-foreground">
-                          {structure.molecule.atoms.length} atoms
-                        </p>
-                      )}
-                    </div>
-                  ))}
+              ) : (
+                <div className="text-center py-6 text-sm text-muted-foreground">
+                  Select a structure to view its distogram
                 </div>
-              </div>
+              )}
             </TabsContent>
+            
+            {/* Statistics Tab */}
             <TabsContent value="stats" className="mt-4">
-              {selectedFileIndex !== null && loadedStructures[selectedFileIndex]?.molecule ? (
-                <div className="space-y-8">
+              {selectedStructure?.molecule ? (
+                <div className="space-y-4">
                   {(() => {
-                    const structure = loadedStructures[selectedFileIndex];
-                    const stats = calculateMoleculeStats(structure.molecule!);
+                    const stats = calculateMoleculeStats(selectedStructure.molecule!);
                     return (
-                      <div key={structure.id} className="space-y-6">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-medium">{structure.name}</h3>
-                          <Badge variant={structure.source === 'file' ? "outline" : "secondary"}>
-                            {structure.source === 'file' ? 'File' : 'Job'}
+                      <div key={selectedStructure.id}>
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-sm font-medium">{selectedStructure.name}</h4>
+                          <Badge variant={selectedStructure.source === 'file' ? "outline" : "secondary"}>
+                            {selectedStructure.source === 'file' ? 'File' : 'Job'}
                           </Badge>
                         </div>
                         
                         {/* Atom Statistics */}
-                        <div>
-                          <h4 className="text-sm font-medium mb-2">Atom Statistics</h4>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="mb-3">
+                          <h5 className="text-sm font-medium mb-1">Atom Statistics</h5>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
                             <div>
                               <p className="text-muted-foreground">Total Atoms</p>
                               <p className="font-medium">{stats.totalAtoms}</p>
@@ -291,19 +313,19 @@ export default function Visualize() {
                           </div>
                         </div>
 
-                        <Separator />
+                        <Separator className="my-3" />
 
                         {/* Chain Information */}
-                        <div>
-                          <h4 className="text-sm font-medium mb-2">Chain Information</h4>
-                          <div className="grid grid-cols-4 gap-4 text-sm font-medium mb-2">
+                        <div className="mb-3">
+                          <h5 className="text-sm font-medium mb-1">Chain Information</h5>
+                          <div className="grid grid-cols-4 gap-2 text-sm font-medium mb-1">
                             <div>Chain</div>
                             <div>Residues</div>
                             <div>Atoms</div>
                             <div>% of Total</div>
                           </div>
                           {stats.chainInfo.map(chain => (
-                            <div key={chain.chainId} className="grid grid-cols-4 gap-4 text-sm">
+                            <div key={chain.chainId} className="grid grid-cols-4 gap-2 text-sm">
                               <div>{chain.chainId}</div>
                               <div>{chain.residueCount}</div>
                               <div>{chain.atomCount}</div>
@@ -314,12 +336,12 @@ export default function Visualize() {
                           ))}
                         </div>
 
-                        <Separator />
+                        <Separator className="my-3" />
 
                         {/* Water and Ion Information */}
                         <div>
-                          <h4 className="text-sm font-medium mb-2">Water and Ion Content</h4>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
+                          <h5 className="text-sm font-medium mb-1">Water and Ion Content</h5>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
                             <div>
                               <p className="text-muted-foreground">Water Molecules</p>
                               <p className="font-medium">{stats.waterCount}</p>
@@ -335,22 +357,8 @@ export default function Visualize() {
                   })()}
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-4 text-sm text-muted-foreground">
                   Select a structure to view its statistics
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="distogram" className="mt-4">
-              {selectedFileIndex !== null && loadedStructures[selectedFileIndex]?.molecule ? (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium">{loadedStructures[selectedFileIndex].name} - Distogram</h3>
-                  </div>
-                  <Distogram molecule={loadedStructures[selectedFileIndex].molecule!} />
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  Select a structure to view its distogram
                 </div>
               )}
             </TabsContent>

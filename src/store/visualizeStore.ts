@@ -33,9 +33,10 @@ interface VisualizeState {
   setViewerState: (state: Partial<ViewerState>) => void;
   deleteFile: (index: number) => void;
   updateStructureMetadata: (id: string, metadata: Structure['metadata']) => void;
+  getSelectedStructure: () => Structure | null;
 }
 
-export const useVisualizeStore = create<VisualizeState>((set) => ({
+export const useVisualizeStore = create<VisualizeState>((set, get) => ({
   files: [],
   selectedFileIndex: null,
   loadedStructures: [],
@@ -62,13 +63,47 @@ export const useVisualizeStore = create<VisualizeState>((set) => ({
     const existingIds = new Set(state.loadedStructures.map(s => s.id));
     const filteredNewStructures = newStructures.filter(s => !existingIds.has(s.id));
     
+    // Create updated structures array
+    const updatedStructures = [...state.loadedStructures, ...filteredNewStructures];
+    
+    // Ensure we have a valid selected index if adding first structure
+    let newSelectedIndex = state.selectedFileIndex;
+    if (state.selectedFileIndex === null && updatedStructures.length > 0) {
+      newSelectedIndex = 0;
+    }
+    
     return { 
-      loadedStructures: [...state.loadedStructures, ...filteredNewStructures] 
+      loadedStructures: updatedStructures,
+      selectedFileIndex: newSelectedIndex
     };
   }),
-  removeStructureById: (id) => set((state) => ({
-    loadedStructures: state.loadedStructures.filter(s => s.id !== id)
-  })),
+  removeStructureById: (id) => set((state) => {
+    // Find the index of the structure to remove
+    const index = state.loadedStructures.findIndex(s => s.id === id);
+    if (index === -1) return state; // Structure not found
+    
+    // Create a new array without the removed structure
+    const newStructures = [...state.loadedStructures];
+    newStructures.splice(index, 1);
+    
+    // Update selected index if needed
+    let newSelectedIndex = state.selectedFileIndex;
+    if (newStructures.length === 0) {
+      // No structures left
+      newSelectedIndex = null;
+    } else if (state.selectedFileIndex === index) {
+      // The selected structure was removed, select the first one
+      newSelectedIndex = 0;
+    } else if (state.selectedFileIndex !== null && state.selectedFileIndex > index) {
+      // Selected index is after the removed one, decrement it
+      newSelectedIndex = state.selectedFileIndex - 1;
+    }
+    
+    return {
+      loadedStructures: newStructures,
+      selectedFileIndex: newSelectedIndex
+    };
+  }),
   setViewerState: (newState) => set((state) => ({ 
     viewerState: { ...state.viewerState, ...newState } 
   })),
@@ -80,26 +115,71 @@ export const useVisualizeStore = create<VisualizeState>((set) => ({
     )
   })),
   deleteFile: (index) => set((state) => {
+    // Guard against invalid index
+    if (index < 0 || index >= state.files.length) {
+      console.error('Invalid file index to delete:', index);
+      return state;
+    }
+
     const newFiles = [...state.files];
     const fileToDelete = newFiles[index];
     newFiles.splice(index, 1);
     
     // Remove the corresponding structure if it exists
-    const newLoadedStructures = state.loadedStructures.filter(
-      s => s.source === 'job' || s.id !== fileToDelete.file.name
+    const structureIndex = state.loadedStructures.findIndex(
+      s => s.source === 'file' && s.id === fileToDelete.file.name
     );
     
+    // If structure wasn't found, just update files
+    if (structureIndex === -1) {
+      console.warn('Deleted file had no corresponding structure:', fileToDelete.file.name);
+      
+      // Update selected file index if needed
+      let newSelectedIndex = state.selectedFileIndex;
+      if (newFiles.length === 0) {
+        newSelectedIndex = null;
+      } else if (state.selectedFileIndex === index) {
+        newSelectedIndex = 0;
+      } else if (state.selectedFileIndex !== null && state.selectedFileIndex > index) {
+        newSelectedIndex = state.selectedFileIndex - 1;
+      }
+      
+      return {
+        files: newFiles,
+        selectedFileIndex: newSelectedIndex
+      };
+    }
+    
+    // Create a new array without the removed structure
+    const newStructures = [...state.loadedStructures];
+    newStructures.splice(structureIndex, 1);
+    
+    // Update selected index properly
     let newSelectedIndex = state.selectedFileIndex;
-    if (state.selectedFileIndex === index) {
-      newSelectedIndex = newFiles.length > 0 ? 0 : null;
-    } else if (state.selectedFileIndex !== null && state.selectedFileIndex > index) {
+    if (newStructures.length === 0) {
+      // No structures left
+      newSelectedIndex = null;
+    } else if (state.selectedFileIndex === structureIndex) {
+      // The selected structure was removed, select the first one
+      newSelectedIndex = 0;
+    } else if (state.selectedFileIndex !== null && state.selectedFileIndex > structureIndex) {
+      // Selected index is after the removed one, decrement it
       newSelectedIndex = state.selectedFileIndex - 1;
     }
 
     return {
       files: newFiles,
-      loadedStructures: newLoadedStructures,
+      loadedStructures: newStructures,
       selectedFileIndex: newSelectedIndex
     };
   }),
+  
+  // Helper method to get the currently selected structure
+  getSelectedStructure: () => {
+    const { selectedFileIndex, loadedStructures } = get();
+    if (selectedFileIndex === null || !loadedStructures[selectedFileIndex]) {
+      return null;
+    }
+    return loadedStructures[selectedFileIndex];
+  }
 })); 
