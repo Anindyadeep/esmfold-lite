@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useEffect, useState } from "react";
+import { Toaster } from "@/components/ui/toaster";
 
 const navItems = [
   { name: "Jobs", path: "/", icon: Home },
@@ -120,6 +121,7 @@ export function Layout() {
           </div>
         </div>
       </div>
+      <Toaster />
     </div>
   );
 } 

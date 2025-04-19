@@ -13,6 +13,7 @@ import { JobSelector } from '@/components/JobSelector';
 import { Badge } from '@/components/ui/badge';
 import { Distogram } from '@/components/Distogram';
 import { Input } from '@/components/ui/input';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 interface MoleculeStats {
   totalAtoms: number;
@@ -84,7 +85,7 @@ const calculateMoleculeStats = (molecule: Molecule): MoleculeStats => {
   return stats;
 };
 
-export default function Visualize() {
+function VisualizeContent() {
   const {
     files,
     selectedFileIndex,
@@ -366,5 +367,14 @@ export default function Visualize() {
         </Card>
       </div>
     </div>
+  );
+}
+
+// Main component with error boundary
+export default function Visualize() {
+  return (
+    <ErrorBoundary>
+      <VisualizeContent />
+    </ErrorBoundary>
   );
 } 

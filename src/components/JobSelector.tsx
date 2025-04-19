@@ -23,8 +23,7 @@ import { parsePDB } from "@/utils/pdbParser";
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-
-const API_BASE_URL = "https://ebbf-194-105-248-9.ngrok-free.app";
+import { getApiUrl } from '@/lib/config';
 
 interface JobResponse {
   job_id: string;
@@ -67,8 +66,17 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
     try {
       // First fetch the job details if we don't have them
       let jobDetails: JobResponse;
+      const API_BASE_URL = getApiUrl();
+      
       if (!job.pdb_content) {
-        const response = await fetch(`${API_BASE_URL}/status/${job.job_id}`);
+        const response = await fetch(`${API_BASE_URL}/status/${job.job_id}`, {
+          method: 'GET',
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        
         if (!response.ok) {
           throw new Error('Failed to fetch job details');
         }
@@ -154,6 +162,7 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
       try {
         setLoading(true);
         setError(null);
+        const API_BASE_URL = getApiUrl();
 
         // Get current user
         const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -162,13 +171,21 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
         }
 
         // Fetch successful jobs from the API
-        const response = await fetch(`${API_BASE_URL}/successful-jobs/${user.id}`);
+        const response = await fetch(`${API_BASE_URL}/successful-jobs/${user.id}`, {
+          method: 'GET',
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        
         if (!response.ok) {
-          throw new Error('Failed to fetch successful jobs');
+          throw new Error(`Failed to fetch successful jobs: ${response.status}`);
         }
         const data = await response.json();
         setJobs(data);
       } catch (err) {
+        console.error('Error fetching jobs:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch jobs');
       } finally {
         setLoading(false);

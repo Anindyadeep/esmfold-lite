@@ -3,6 +3,7 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { FormControl, InputLabel, MenuItem, Select, SelectChangeEvent } from '@mui/material';
+import { getApiUrl } from '../lib/config';
 
 interface Job {
   job_id: string;
@@ -25,13 +26,31 @@ export default function JobSelector({ onSelect }: JobSelectorProps) {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        const response = await fetch('http://localhost:8000/successful-jobs');
-        if (!response.ok) {
-          throw new Error('Failed to fetch jobs');
+        const API_BASE_URL = getApiUrl();
+        console.log('Fetching jobs from:', API_BASE_URL);
+        
+        try {
+          const response = await fetch(`${API_BASE_URL}/successful-jobs`, {
+            method: 'GET',
+            mode: 'cors',
+            headers: {
+              'Accept': 'application/json',
+            }
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unknown error');
+            throw new Error(`Failed to fetch jobs: ${response.status} - ${errorText}`);
+          }
+          
+          const data = await response.json();
+          setJobs(data);
+        } catch (fetchError) {
+          console.error('Network error fetching jobs:', fetchError);
+          setError(fetchError instanceof Error ? fetchError.message : 'Network error fetching jobs');
         }
-        const data = await response.json();
-        setJobs(data);
       } catch (err) {
+        console.error('Error in job fetching process:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch jobs');
       } finally {
         setLoading(false);

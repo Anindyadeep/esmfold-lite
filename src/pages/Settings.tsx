@@ -19,9 +19,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/lib/supabase";
+import { toast } from "@/components/ui/use-toast";
+import { Loader2 } from "lucide-react";
+import { DEFAULT_API_URL } from "@/lib/config";
 
-// Define the default server URL
-const DEFAULT_SERVER_URL = 'https://api.example.com';
+// Use the default server URL from the config
+const DEFAULT_SERVER_URL = DEFAULT_API_URL;
 
 export default function Settings() {
   const [serverType, setServerType] = useState(() => {
@@ -45,6 +48,8 @@ export default function Settings() {
     }
     return 'Default';
   });
+
+  const [isValidating, setIsValidating] = useState(false);
 
   const [user, setUser] = useState<{
     email?: string | undefined;
@@ -84,11 +89,46 @@ export default function Settings() {
     }
   }, [serverType]);
 
-  const handleSaveUrl = () => {
+  const handleSaveUrl = async () => {
     if (customUrl && serverType === 'custom') {
-      setActiveServerUrl(customUrl);
-      localStorage.setItem('savedCustomUrl', customUrl);
-      localStorage.setItem('customUrl', customUrl);
+      try {
+        setIsValidating(true);
+        // Check if the server is accessible by sending a request to the health endpoint
+        const healthUrl = `${customUrl.trim()}/health`;
+        const response = await fetch(healthUrl, { 
+          method: 'GET',
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        
+        if (response.ok) {
+          setActiveServerUrl(customUrl);
+          localStorage.setItem('savedCustomUrl', customUrl);
+          localStorage.setItem('customUrl', customUrl);
+          toast({
+            title: "Success",
+            description: "Custom server URL has been saved.",
+            variant: "default",
+          });
+        } else {
+          toast({
+            title: "Server Error",
+            description: "Could not connect to the server. Please check the URL and try again.",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        toast({
+          title: "Connection Error",
+          description: "Failed to connect to the server. Please check the URL and try again.",
+          variant: "destructive",
+        });
+        console.error("Server validation error:", error);
+      } finally {
+        setIsValidating(false);
+      }
     }
   };
 
@@ -161,7 +201,7 @@ export default function Settings() {
                     Active Server URL
                   </p>
                   <p className="text-sm font-medium break-all">
-                    {activeServerUrl === 'Default' ? DEFAULT_SERVER_URL : activeServerUrl}
+                    {activeServerUrl === 'Default' ? 'Default ESMFold Server' : activeServerUrl}
                   </p>
                 </div>
               </div>
@@ -218,10 +258,17 @@ export default function Settings() {
                   <div className="flex items-center gap-4">
                     <Button 
                       onClick={handleSaveUrl}
-                      disabled={!customUrl.trim()}
+                      disabled={!customUrl.trim() || isValidating}
                       className="w-full sm:w-auto"
                     >
-                      Save Configuration
+                      {isValidating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Validating Server
+                        </>
+                      ) : (
+                        "Save Configuration"
+                      )}
                     </Button>
                     {!customUrl.trim() && (
                       <p className="text-sm text-muted-foreground">
