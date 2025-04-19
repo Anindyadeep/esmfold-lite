@@ -2,17 +2,26 @@ import { create } from 'zustand'
 import { Molecule } from '@/utils/pdbParser'
 import { ViewMode, ColorScheme, ViewerState } from '@/types/viewer'
 
+interface Structure {
+  id: string;
+  pdbData: string;
+  source: 'file' | 'job';
+  molecule?: Molecule;
+  name: string;
+}
+
 interface VisualizeState {
   files: { file: File; molecule?: Molecule }[];
   selectedFileIndex: number | null;
-  loadedStructures: { id: string; pdbData: string }[];
+  loadedStructures: Structure[];
   viewerState: ViewerState;
   setFiles: (files: { file: File; molecule?: Molecule }[]) => void;
   addFiles: (files: { file: File; molecule?: Molecule }[]) => void;
   updateFile: (index: number, data: { molecule?: Molecule }) => void;
   setSelectedFileIndex: (index: number | null) => void;
-  setLoadedStructures: (structures: { id: string; pdbData: string }[]) => void;
-  addLoadedStructures: (structures: { id: string; pdbData: string }[]) => void;
+  setLoadedStructures: (structures: Structure[]) => void;
+  addLoadedStructures: (structures: Structure[]) => void;
+  removeStructureById: (id: string) => void;
   setViewerState: (state: Partial<ViewerState>) => void;
   deleteFile: (index: number) => void;
 }
@@ -39,17 +48,30 @@ export const useVisualizeStore = create<VisualizeState>((set) => ({
   }),
   setSelectedFileIndex: (index) => set({ selectedFileIndex: index }),
   setLoadedStructures: (structures) => set({ loadedStructures: structures }),
-  addLoadedStructures: (newStructures) => set((state) => ({ 
-    loadedStructures: [...state.loadedStructures, ...newStructures] 
+  addLoadedStructures: (newStructures) => set((state) => {
+    // Filter out any structures with IDs that already exist
+    const existingIds = new Set(state.loadedStructures.map(s => s.id));
+    const filteredNewStructures = newStructures.filter(s => !existingIds.has(s.id));
+    
+    return { 
+      loadedStructures: [...state.loadedStructures, ...filteredNewStructures] 
+    };
+  }),
+  removeStructureById: (id) => set((state) => ({
+    loadedStructures: state.loadedStructures.filter(s => s.id !== id)
   })),
   setViewerState: (newState) => set((state) => ({ 
     viewerState: { ...state.viewerState, ...newState } 
   })),
   deleteFile: (index) => set((state) => {
     const newFiles = [...state.files];
-    const newLoadedStructures = [...state.loadedStructures];
+    const fileToDelete = newFiles[index];
     newFiles.splice(index, 1);
-    newLoadedStructures.splice(index, 1);
+    
+    // Remove the corresponding structure if it exists
+    const newLoadedStructures = state.loadedStructures.filter(
+      s => s.source === 'job' || s.id !== fileToDelete.file.name
+    );
     
     let newSelectedIndex = state.selectedFileIndex;
     if (state.selectedFileIndex === index) {

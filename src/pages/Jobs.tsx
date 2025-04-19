@@ -4,6 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -141,6 +148,30 @@ export default function Jobs() {
                   className="h-24"
                   required
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="model">Using model</Label>
+                <Select
+                  value={formData.selectedModel}
+                  onValueChange={(value) => setFormData({ selectedModel: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ESMFold">ESMFold</SelectItem>
+                    <SelectItem value="Proteinx" disabled>
+                      Proteinx (Coming soon)
+                    </SelectItem>
+                    <SelectItem value="Chai-1" disabled>
+                      Chai-1 (Coming soon)
+                    </SelectItem>
+                    <SelectItem value="NanoFold" disabled>
+                      NanoFold (Coming soon)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2 flex-grow">

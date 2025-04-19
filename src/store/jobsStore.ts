@@ -13,6 +13,7 @@ interface JobFormData {
   name: string;
   description: string;
   inputString: string;
+  selectedModel: string;
 }
 
 interface JobsState {
@@ -28,6 +29,7 @@ const initialFormData: JobFormData = {
   name: "",
   description: "",
   inputString: "",
+  selectedModel: "ESMFold",
 };
 
 export const useJobsStore = create<JobsState>((set) => ({
