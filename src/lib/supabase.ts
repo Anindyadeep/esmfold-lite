@@ -1,13 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
+// Get environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+// Validate environment variables
+if (!supabaseUrl) {
+  console.error('Missing VITE_SUPABASE_URL environment variable');
+  throw new Error('Missing Supabase URL configuration. Please check your environment variables.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+if (!supabaseAnonKey) {
+  console.error('Missing VITE_SUPABASE_ANON_KEY environment variable');
+  throw new Error('Missing Supabase key configuration. Please check your environment variables.');
+}
+
+// Create supabase client with proper types
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+});
 
 export interface LiteFoldJob {
   id: string

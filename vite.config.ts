@@ -15,28 +15,50 @@ export default defineConfig(({ mode }) => ({
         target: DEFAULT_API_URL,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
+        secure: false, // Accept self-signed certificates in development
         configure: (proxy, _options) => {
+          // Basic error handling to prevent crashes
           proxy.on('error', (err, _req, _res) => {
-            console.log('proxy error', err);
+            console.error('Proxy error:', err);
           });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-          });
+          
+          // Only log in development mode with debug enabled
+          if (mode === 'development' && process.env.DEBUG) {
+            proxy.on('proxyReq', (proxyReq, req, _res) => {
+              console.log('Proxy Request:', req.method, req.url);
+            });
+            proxy.on('proxyRes', (proxyRes, req, _res) => {
+              console.log('Proxy Response:', proxyRes.statusCode, req.url);
+            });
+          }
         },
       },
     },
   },
   plugins: [
     react(),
-    mode === 'development' &&
-    componentTagger(),
+    mode === 'development' && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  // Ensure we only build what's needed
+  build: {
+    sourcemap: mode !== 'production',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'ui-components': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-label',
+            '@radix-ui/react-select',
+          ],
+        },
+      },
     },
   },
 }));
