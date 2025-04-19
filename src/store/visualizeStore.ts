@@ -8,6 +8,14 @@ interface Structure {
   source: 'file' | 'job';
   molecule?: Molecule;
   name: string;
+  metadata?: {
+    distogram?: number[][];
+    plddt_score?: number;
+    created_at?: string;
+    completed_at?: string;
+    error_message?: string | null;
+    user_id?: string;
+  };
 }
 
 interface VisualizeState {
@@ -24,6 +32,7 @@ interface VisualizeState {
   removeStructureById: (id: string) => void;
   setViewerState: (state: Partial<ViewerState>) => void;
   deleteFile: (index: number) => void;
+  updateStructureMetadata: (id: string, metadata: Structure['metadata']) => void;
 }
 
 export const useVisualizeStore = create<VisualizeState>((set) => ({
@@ -62,6 +71,13 @@ export const useVisualizeStore = create<VisualizeState>((set) => ({
   })),
   setViewerState: (newState) => set((state) => ({ 
     viewerState: { ...state.viewerState, ...newState } 
+  })),
+  updateStructureMetadata: (id, metadata) => set((state) => ({
+    loadedStructures: state.loadedStructures.map(structure => 
+      structure.id === id 
+        ? { ...structure, metadata: { ...structure.metadata, ...metadata } }
+        : structure
+    )
   })),
   deleteFile: (index) => set((state) => {
     const newFiles = [...state.files];

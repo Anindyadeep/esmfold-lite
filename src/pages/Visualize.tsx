@@ -12,6 +12,8 @@ import { ViewMode, ColorScheme } from '@/types/viewer';
 import { JobSelector } from '@/components/JobSelector';
 import { Badge } from '@/components/ui/badge';
 import { Distogram } from '@/components/Distogram';
+import { Input } from '@/components/ui/input';
+import { useState, useEffect } from 'react';
 
 interface MoleculeStats {
   totalAtoms: number;

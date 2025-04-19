@@ -20,48 +20,10 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useJobsStore } from "@/store/jobsStore";
-
-interface Job {
-  id: string;
-  name: string;
-  description: string;
-  status: 'completed' | 'running' | 'failed' | 'queued';
-  submittedAt: string;
-  completedAt?: string;
-}
-
-const mockJobs: Job[] = [
-  {
-    id: "job_123",
-    name: "Protein Structure Analysis",
-    description: "Analysis of protein folding patterns",
-    status: "completed",
-    submittedAt: "2024-03-20T10:30:00Z",
-    completedAt: "2024-03-20T10:35:00Z",
-  },
-  {
-    id: "job_124",
-    name: "Molecular Dynamics",
-    description: "Simulation of molecular interactions",
-    status: "running",
-    submittedAt: "2024-03-20T11:00:00Z",
-  },
-  {
-    id: "job_125",
-    name: "Structure Prediction",
-    description: "Predicting protein secondary structure",
-    status: "queued",
-    submittedAt: "2024-03-20T11:15:00Z",
-  },
-  {
-    id: "job_126",
-    name: "Failed Analysis",
-    description: "Example of a failed job",
-    status: "failed",
-    submittedAt: "2024-03-20T09:00:00Z",
-    completedAt: "2024-03-20T09:02:00Z",
-  },
-];
+import { useEffect, useState } from "react";
+import { Toaster } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 const proteinExamples = [
   {
@@ -82,34 +44,71 @@ const proteinExamples = [
 ];
 
 export default function Jobs() {
-  const { jobs, formData, setFormData, addJob, resetFormData } = useJobsStore();
+  const { 
+    jobs, 
+    formData, 
+    setFormData, 
+    submitJob, 
+    fetchJobs,
+    updateJobStatus 
+  } = useJobsStore();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newJob = {
-      id: `job_${Date.now()}`,
-      name: formData.name,
-      description: formData.description,
-      status: 'queued' as const,
-      submittedAt: new Date().toISOString(),
+  // Get the current user's session
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    // Get current user
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
     };
-    addJob(newJob);
-    resetFormData();
+    getUser();
+  }, []);
+
+  // Initial fetch of jobs - now user-specific
+  useEffect(() => {
+    if (user) {
+      fetchJobs();
+    }
+  }, [fetchJobs, user]);
+
+  // Poll for status updates of pending/processing jobs
+  useEffect(() => {
+    if (!user) return;
+
+    const pollInterval = setInterval(() => {
+      jobs.forEach(job => {
+        if (job.status === 'pending' || job.status === 'processing') {
+          updateJobStatus(job.job_id);
+        }
+      });
+    }, 10000); // Poll every 10 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [jobs, updateJobStatus, user]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      toast.error('Please login to submit jobs');
+      return;
+    }
+    await submitJob();
   };
 
   const handleExampleClick = (sequence: string) => {
     setFormData({ inputString: sequence });
   };
 
-  const getStatusBadgeColor = (status: Job['status']) => {
+  const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'successful':
         return 'bg-green-500/15 text-green-700 hover:bg-green-500/25';
-      case 'running':
+      case 'processing':
         return 'bg-blue-500/15 text-blue-700 hover:bg-blue-500/25';
-      case 'failed':
+      case 'crashed':
         return 'bg-red-500/15 text-red-700 hover:bg-red-500/25';
-      case 'queued':
+      case 'pending':
         return 'bg-yellow-500/15 text-yellow-700 hover:bg-yellow-500/25';
       default:
         return '';
@@ -122,6 +121,7 @@ export default function Jobs() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 p-6">
+      <Toaster />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="h-full">
           <h2 className="text-2xl font-bold mb-6">Submit New Job</h2>
@@ -233,6 +233,7 @@ export default function Jobs() {
               <TableRow>
                 <TableHead>Job ID</TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Model</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Submitted</TableHead>
@@ -241,17 +242,18 @@ export default function Jobs() {
             </TableHeader>
             <TableBody>
               {jobs.map((job) => (
-                <TableRow key={job.id}>
-                  <TableCell className="font-mono">{job.id}</TableCell>
-                  <TableCell>{job.name}</TableCell>
-                  <TableCell className="max-w-xs truncate">{job.description}</TableCell>
+                <TableRow key={job.job_id}>
+                  <TableCell className="font-mono">{job.job_id}</TableCell>
+                  <TableCell>{job.job_name}</TableCell>
+                  <TableCell>{job.model}</TableCell>
+                  <TableCell className="max-w-xs truncate">{job.job_desc}</TableCell>
                   <TableCell>
                     <Badge className={getStatusBadgeColor(job.status)} variant="secondary">
                       {job.status}
                     </Badge>
                   </TableCell>
-                  <TableCell>{formatDate(job.submittedAt)}</TableCell>
-                  <TableCell>{job.completedAt ? formatDate(job.completedAt) : '-'}</TableCell>
+                  <TableCell>{formatDate(job.created_at)}</TableCell>
+                  <TableCell>{job.completed_at ? formatDate(job.completed_at) : '-'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
