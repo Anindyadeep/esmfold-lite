@@ -1,0 +1,38 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main protein structure lines -->
+  <g opacity="0.2" stroke-width="2" stroke-linecap="round">
+    <!-- Helical structure -->
+    <path d="M200 200 C250 150, 300 180, 350 150 C400 120, 450 150, 500 120 C550 90, 600 120, 650 90 C700 60, 750 90, 800 60" stroke="#3B82F6" />
+    
+    <!-- Beta sheets -->
+    <path d="M300 300 L400 280 L500 300 L600 280 L700 300" stroke="#3B82F6" />
+    <path d="M350 350 L450 330 L550 350 L650 330 L750 350" stroke="#3B82F6" />
+    <path d="M400 400 L500 380 L600 400 L700 380 L800 400" stroke="#3B82F6" />
+    
+    <!-- Connecting structures -->
+    <path d="M800 60 C850 90, 900 60, 950 90 C1000 120, 1050 90, 1100 120" stroke="#3B82F6" />
+    <path d="M800 400 C850 430, 900 400, 950 430 C1000 460, 1050 430, 1100 460" stroke="#3B82F6" />
+    
+    <!-- Random coils -->
+    <path d="M100 500 C150 450, 120 530, 170 480 C220 430, 190 510, 240 460 C290 410, 260 490, 310 440" stroke="#3B82F6" />
+    <path d="M900 600 C950 550, 920 630, 970 580 C1020 530, 990 610, 1040 560 C1090 510, 1060 590, 1110 540" stroke="#3B82F6" />
+    
+    <!-- Amino acid nodes -->
+    <circle cx="200" cy="200" r="6" fill="#60A5FA" />
+    <circle cx="350" cy="150" r="6" fill="#60A5FA" />
+    <circle cx="500" cy="120" r="6" fill="#60A5FA" />
+    <circle cx="650" cy="90" r="6" fill="#60A5FA" />
+    <circle cx="800" cy="60" r="6" fill="#60A5FA" />
+    
+    <circle cx="300" cy="300" r="6" fill="#60A5FA" />
+    <circle cx="400" cy="280" r="6" fill="#60A5FA" />
+    <circle cx="500" cy="300" r="6" fill="#60A5FA" />
+    <circle cx="600" cy="280" r="6" fill="#60A5FA" />
+    <circle cx="700" cy="300" r="6" fill="#60A5FA" />
+    
+    <circle cx="100" cy="500" r="6" fill="#60A5FA" />
+    <circle cx="170" cy="480" r="6" fill="#60A5FA" />
+    <circle cx="240" cy="460" r="6" fill="#60A5FA" />
+    <circle cx="310" cy="440" r="6" fill="#60A5FA" />
+  </g>
+</svg> 

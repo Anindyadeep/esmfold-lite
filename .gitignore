@@ -58,3 +58,4 @@ dist-ssr
 .env
 pp.pdb
 pp
+.vercel

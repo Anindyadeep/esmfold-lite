@@ -1,0 +1,48 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g opacity="0.9">
+    <!-- Central Alpha Carbon -->
+    <circle cx="60" cy="60" r="8" fill="url(#molecule-gradient)" class="animate-pulse">
+      <animate attributeName="opacity" values="0.7;1;0.7" dur="3s" repeatCount="indefinite" />
+    </circle>
+    
+    <!-- Amino Acid Bonds -->
+    <line x1="60" y1="30" x2="60" y2="52" stroke-width="2" stroke="url(#molecule-gradient)" stroke-linecap="round">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite" />
+    </line>
+    <line x1="60" y1="68" x2="60" y2="90" stroke-width="2" stroke="url(#molecule-gradient)" stroke-linecap="round">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2.5s" repeatCount="indefinite" />
+    </line>
+    <line x1="30" y1="60" x2="52" y2="60" stroke-width="2" stroke="url(#molecule-gradient)" stroke-linecap="round">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2.2s" repeatCount="indefinite" />
+    </line>
+    <line x1="68" y1="60" x2="90" y2="60" stroke-width="2" stroke="url(#molecule-gradient)" stroke-linecap="round">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2.7s" repeatCount="indefinite" />
+    </line>
+    
+    <!-- Connected Atoms -->
+    <circle cx="60" cy="30" r="5" fill="url(#molecule-gradient2)">
+      <animate attributeName="r" values="4;5;4" dur="3s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="60" cy="90" r="5" fill="url(#molecule-gradient2)">
+      <animate attributeName="r" values="4;5;4" dur="3.5s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="30" cy="60" r="5" fill="url(#molecule-gradient2)">
+      <animate attributeName="r" values="4;5;4" dur="2.8s" repeatCount="indefinite" />
+    </circle>
+    <circle cx="90" cy="60" r="5" fill="url(#molecule-gradient2)">
+      <animate attributeName="r" values="4;5;4" dur="3.2s" repeatCount="indefinite" />
+    </circle>
+  </g>
+  
+  <!-- Gradients -->
+  <defs>
+    <linearGradient id="molecule-gradient" x1="0" y1="0" x2="120" y2="120">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#06B6D4" />
+    </linearGradient>
+    <linearGradient id="molecule-gradient2" x1="0" y1="0" x2="120" y2="120">
+      <stop offset="0%" stop-color="#0EA5E9" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+  </defs>
+</svg> 
