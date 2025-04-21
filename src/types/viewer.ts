@@ -8,4 +8,5 @@ export interface ViewerState {
   atomSize: number;
   showLigand: boolean;
   showWaterIon: boolean;
+  selectedResidues?: number[];
 } 

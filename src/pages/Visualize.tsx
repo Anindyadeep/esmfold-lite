@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Distogram } from '@/components/Distogram';
 import { Input } from '@/components/ui/input';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { SequenceViewer, ResidueInfo } from '@/components/SequenceViewer';
 
 interface MoleculeStats {
   totalAtoms: number;
@@ -248,6 +249,103 @@ function VisualizeContent() {
       </div>
         
       <div className="col-span-9 flex flex-col gap-4">
+        {/* Sequence Viewer placed above the 3D Viewer */}
+        {selectedStructure?.molecule && (
+          <Card className="p-4 bg-card">
+            <div className="flex items-center justify-between mb-3">
+              <h5 className="text-sm font-medium">Sequence</h5>
+              <Badge variant={selectedStructure.source === 'file' ? "outline" : "secondary"}>
+                {selectedStructure.name || 'Structure'}
+              </Badge>
+            </div>
+            {(() => {
+              // Extract sequence information
+              const residuesById = selectedStructure.molecule.atoms
+                .filter(atom => atom.residue !== 'HOH' && atom.residue !== 'WAT')
+                .reduce((acc, atom) => {
+                  if (!acc[atom.residueId]) {
+                    acc[atom.residueId] = {
+                      id: atom.residueId,
+                      name: atom.residue,
+                      chain: atom.chain
+                    };
+                  }
+                  return acc;
+                }, {} as Record<number, { id: number, name: string, chain: string }>);
+              
+              // Sort residues by ID to maintain proper sequence order
+              const sortedResidueIds = Object.keys(residuesById)
+                .map(Number)
+                .sort((a, b) => a - b);
+              
+              // Convert 3-letter amino acid codes to 1-letter codes for display
+              const aminoAcidMap: Record<string, string> = {
+                'ALA': 'A', 'ARG': 'R', 'ASN': 'N', 'ASP': 'D',
+                'CYS': 'C', 'GLN': 'Q', 'GLU': 'E', 'GLY': 'G',
+                'HIS': 'H', 'ILE': 'I', 'LEU': 'L', 'LYS': 'K',
+                'MET': 'M', 'PHE': 'F', 'PRO': 'P', 'SER': 'S',
+                'THR': 'T', 'TRP': 'W', 'TYR': 'Y', 'VAL': 'V',
+                // Non-standard amino acids
+                'MSE': 'M', 'HSE': 'H', 'HSD': 'H', 'HSP': 'H',
+                'SEC': 'U', 'PYL': 'O', 'ASX': 'B', 'GLX': 'Z',
+                'UNK': 'X'
+              };
+              
+              // Build the residue info array
+              const residueInfo: ResidueInfo[] = [];
+              sortedResidueIds.forEach(resId => {
+                const residue = residuesById[resId];
+                const code = aminoAcidMap[residue.name] || 'X'; // Default to X for unknown
+                residueInfo.push({ 
+                  id: resId, 
+                  code,
+                  name: residue.name,
+                  chain: residue.chain
+                });
+              });
+              
+              const sequenceString = residueInfo.map(res => res.code).join('');
+              
+              const handleResidueClick = (index: number) => {
+                const residueId = residueInfo[index]?.id;
+                if (residueId !== undefined) {
+                  setViewerState({
+                    ...viewerState,
+                    selectedResidues: [residueId]
+                  });
+                }
+              };
+
+              return (
+                <SequenceViewer 
+                  sequence={sequenceString}
+                  residueData={residueInfo}
+                  onResidueClick={handleResidueClick}
+                  onResidueHover={(index) => {
+                    if (index === null) {
+                      // Clear selection when not hovering
+                      setViewerState({
+                        ...viewerState,
+                        selectedResidues: []
+                      });
+                    } else {
+                      // Get the actual residue ID from our mapping
+                      const residueId = residueInfo[index]?.id;
+                      if (residueId !== undefined) {
+                        // Update viewer state to highlight the hovered residue
+                        setViewerState({
+                          ...viewerState,
+                          selectedResidues: [residueId]
+                        });
+                      }
+                    }
+                  }}
+                />
+              );
+            })()}
+          </Card>
+        )}
+        
         {/* 3D Viewer */}
         <Card className="flex-1 p-0 overflow-hidden rounded-lg border bg-card shadow-sm relative aspect-square">
           <div className="absolute inset-0">
@@ -258,73 +356,77 @@ function VisualizeContent() {
           </div>
         </Card>
             
-        {/* Restore tabs but with Distogram first */}
-        <Card className="p-4">
-          <Tabs defaultValue="distogram" className="w-full">
-            <TabsList className="w-full justify-start">
-              <TabsTrigger value="distogram">Distogram</TabsTrigger>
-              <TabsTrigger value="stats">Statistics</TabsTrigger>
-            </TabsList>
-            
-            {/* Distogram Tab */}
-            <TabsContent value="distogram" className="mt-4">
-              {selectedStructure?.molecule ? (
-                <div ref={plotRef} style={{ width: '100%', height: '450px' }}>
-                  <Distogram 
-                    molecule={selectedStructure.molecule!} 
-                    data={selectedStructure.metadata?.distogram}
-                    width={plotRef?.current?.offsetWidth || 600}
-                    height={450}
-                  />
-                </div>
-              ) : (
-                <div className="text-center py-6 text-sm text-muted-foreground">
-                  Select a structure to view its distogram
-                </div>
-              )}
-            </TabsContent>
-            
-            {/* Statistics Tab */}
-            <TabsContent value="stats" className="mt-4">
-              {selectedStructure?.molecule ? (
-                <div className="space-y-4">
-                  {(() => {
-                    const stats = calculateMoleculeStats(selectedStructure.molecule!);
-                    return (
-                      <div key={selectedStructure.id}>
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-medium">{selectedStructure.name}</h4>
-                          <Badge variant={selectedStructure.source === 'file' ? "outline" : "secondary"}>
-                            {selectedStructure.source === 'file' ? 'File' : 'Job'}
-                          </Badge>
-                        </div>
-                        
-                        {/* Atom Statistics */}
-                        <div className="mb-3">
-                          <h5 className="text-sm font-medium mb-1">Atom Statistics</h5>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">Total Atoms</p>
-                              <p className="font-medium">{stats.totalAtoms}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Unique Elements</p>
-                              <p className="font-medium">{stats.uniqueElements.join(', ')}</p>
-                            </div>
+        {/* Split view with Distogram and Stats side by side */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* Distogram Card - Left Side */}
+          <Card className="p-4 overflow-hidden">
+            <div className="flex items-center justify-between mb-4">
+              <h5 className="text-sm font-medium">Distogram</h5>
+            </div>
+            {selectedStructure?.molecule ? (
+              <div className="h-[400px] w-full relative" ref={plotRef}>
+                <Distogram 
+                  molecule={selectedStructure.molecule!} 
+                  data={selectedStructure.metadata?.distogram}
+                  width={plotRef?.current?.offsetWidth || 500}
+                  height={380}
+                />
+              </div>
+            ) : (
+              <div className="text-center py-6 text-sm text-muted-foreground h-[400px] flex items-center justify-center">
+                Select a structure to view its distogram
+              </div>
+            )}
+          </Card>
+
+          {/* Statistics Card - Right Side */}
+          <Card className="p-4 overflow-auto max-h-[500px]">
+            <div className="flex items-center justify-between mb-4">
+              <h5 className="text-sm font-medium">Statistics</h5>
+            </div>
+            {selectedStructure?.molecule ? (
+              <div className="space-y-4">
+                {(() => {
+                  const stats = calculateMoleculeStats(selectedStructure.molecule!);
+                  
+                  return (
+                    <div key={selectedStructure.id}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-medium">{selectedStructure.name}</h4>
+                        <Badge variant={selectedStructure.source === 'file' ? "outline" : "secondary"}>
+                          {selectedStructure.source === 'file' ? 'File' : 'Job'}
+                        </Badge>
+                      </div>
+
+                      <Separator className="my-3" />
+                      
+                      {/* Atom Statistics */}
+                      <div className="mb-3">
+                        <h5 className="text-sm font-medium mb-1">Atom Statistics</h5>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Total Atoms</p>
+                            <p className="font-medium">{stats.totalAtoms}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Unique Elements</p>
+                            <p className="font-medium">{stats.uniqueElements.join(', ')}</p>
                           </div>
                         </div>
+                      </div>
 
-                        <Separator className="my-3" />
+                      <Separator className="my-3" />
 
-                        {/* Chain Information */}
-                        <div className="mb-3">
-                          <h5 className="text-sm font-medium mb-1">Chain Information</h5>
-                          <div className="grid grid-cols-4 gap-2 text-sm font-medium mb-1">
-                            <div>Chain</div>
-                            <div>Residues</div>
-                            <div>Atoms</div>
-                            <div>% of Total</div>
-                          </div>
+                      {/* Chain Information */}
+                      <div className="mb-3">
+                        <h5 className="text-sm font-medium mb-1">Chain Information</h5>
+                        <div className="grid grid-cols-4 gap-2 text-sm font-medium mb-1">
+                          <div>Chain</div>
+                          <div>Residues</div>
+                          <div>Atoms</div>
+                          <div>% of Total</div>
+                        </div>
+                        <div className="max-h-[150px] overflow-auto pr-2">
                           {stats.chainInfo.map(chain => (
                             <div key={chain.chainId} className="grid grid-cols-4 gap-2 text-sm">
                               <div>{chain.chainId}</div>
@@ -336,35 +438,35 @@ function VisualizeContent() {
                             </div>
                           ))}
                         </div>
+                      </div>
 
-                        <Separator className="my-3" />
+                      <Separator className="my-3" />
 
-                        {/* Water and Ion Information */}
-                        <div>
-                          <h5 className="text-sm font-medium mb-1">Water and Ion Content</h5>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">Water Molecules</p>
-                              <p className="font-medium">{stats.waterCount}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Ion Count</p>
-                              <p className="font-medium">{stats.ionCount}</p>
-                            </div>
+                      {/* Water and Ion Information */}
+                      <div>
+                        <h5 className="text-sm font-medium mb-1">Water and Ion Content</h5>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Water Molecules</p>
+                            <p className="font-medium">{stats.waterCount}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Ion Count</p>
+                            <p className="font-medium">{stats.ionCount}</p>
                           </div>
                         </div>
                       </div>
-                    );
-                  })()}
-                </div>
-              ) : (
-                <div className="text-center py-4 text-sm text-muted-foreground">
-                  Select a structure to view its statistics
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </Card>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-sm text-muted-foreground h-[400px] flex items-center justify-center">
+                Select a structure to view its statistics
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
     </div>
   );

@@ -280,6 +280,85 @@ export const NGLViewer = forwardRef<any, NGLViewerProps>(({ structures, viewerSt
           colorScheme: 'element'
         });
       }
+
+      // Highlight selected residues if any
+      if (viewerState.selectedResidues && viewerState.selectedResidues.length > 0) {
+        // Create selection string for residues
+        const residueSelection = viewerState.selectedResidues
+          .map(resNum => `${resNum}`)
+          .join(' or ');
+        
+        console.log(`Highlighting residues: ${residueSelection}`);
+        
+        // Add ball+stick representation for highlighted residues
+        structure.addRepresentation('ball+stick', {
+          name: "selectedResidues",
+          sele: residueSelection,
+          quality: 'high',
+          aspectRatio: 1.5,
+          scale: viewerState.atomSize * 1.5,
+          bondScale: viewerState.atomSize * 0.3,
+          bondSpacing: 1.0,
+          color: 0xFF0000, // Red color for highlighted residues
+          opacity: 1.0
+        });
+        
+        // Add a label for each selected residue with residue name and ID
+        viewerState.selectedResidues.forEach(resNum => {
+          structure.addRepresentation('label', {
+            name: `label-${resNum}`,
+            sele: `${resNum} and .CA`, // Select alpha carbon of the residue
+            labelType: 'res',          // This shows "ALA 1", "GLY 2", etc. - both name and number
+            labelColor: 0xFFFFFF,
+            labelSize: 1.2,
+            labelBorder: true,
+            labelBorderColor: 0x000000,
+            labelBorderWidth: 0.25,
+            labelBackground: true,
+            labelBackgroundColor: 0x000000,
+            labelBackgroundOpacity: 0.5,
+            labelZOffset: 0.5,
+            labelYOffset: 0.0,
+            labelXOffset: 0.0
+          });
+        });
+        
+        // Center view on the selected residue(s) with smoother animation
+        try {
+          // Create a selection using the residue numbers
+          const selection = structure.structure.getSelection(residueSelection);
+          
+          if (selection && selection.atomCount > 0) {
+            // Get the center of the selection
+            const center = selection.center();
+            
+            // Calculate appropriate zoom level based on selection size
+            // This creates a nice view that focuses on the selected residue
+            // while showing some context around it
+            const boundingBox = selection.boundingBox;
+            const size = Math.max(
+              boundingBox.size().x,
+              boundingBox.size().y,
+              boundingBox.size().z,
+              5 // Minimum size to prevent too much zoom on small residues
+            );
+            
+            // Use more sophisticated zooming with a slower, smoother animation
+            stageRef.current.animationControls.move(center, 600);
+            
+            // Adjust camera position based on view mode
+            if (viewerState.viewMode === 'surface') {
+              // For surface mode, we need to be further away
+              stageRef.current.animationControls.zoom(size * 2, 600);
+            } else {
+              // For other modes, we can be closer
+              stageRef.current.animationControls.zoom(size * 1.5, 600);
+            }
+          }
+        } catch (error) {
+          console.error('Error centering on residue:', error);
+        }
+      }
     } catch (error) {
       console.error('Error updating representation:', error);
     }
