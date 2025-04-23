@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { Settings, Home, Eye, LogOut } from "lucide-react";
+import { Settings, Home, Eye, LogOut, PanelLeftClose, PanelLeft, Github } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { name: "Jobs", path: "/", icon: Home },
@@ -23,6 +24,7 @@ const navItems = [
 
 export function Layout() {
   const location = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [user, setUser] = useState<{
     email?: string;
     avatar_url?: string;
@@ -58,15 +60,30 @@ export function Layout() {
     await supabase.auth.signOut();
   };
 
+  const toggleSidebar = () => {
+    setIsCollapsed(!isCollapsed);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="flex h-screen">
         {/* Sidebar */}
-        <div className="w-64 border-r bg-card shadow-sm transition-all duration-200">
-          <div className="flex h-14 items-center border-b px-6">
-            <h1 className="text-lg font-semibold tracking-tight">LiteFold</h1>
+        <div className={cn(
+          "border-r bg-card shadow-sm transition-all duration-200",
+          isCollapsed ? "w-16" : "w-64"
+        )}>
+          <div className="flex h-14 items-center border-b px-4 justify-between">
+            {!isCollapsed && <h1 className="text-lg font-semibold tracking-tight">LiteFold</h1>}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="h-8 w-8"
+            >
+              {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </Button>
           </div>
-          <nav className="flex flex-col h-[calc(100%-3.5rem)] justify-between p-4">
+          <nav className="flex flex-col h-[calc(100%-3.5rem)] justify-between p-2">
             <div className="space-y-1">
               {navItems.map((item) => (
                 <Link
@@ -78,24 +95,30 @@ export function Layout() {
                       ? "bg-primary/10 text-primary hover:bg-primary/15"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
+                  title={isCollapsed ? item.name : undefined}
                 >
                   <item.icon className="h-4 w-4" />
-                  {item.name}
+                  {!isCollapsed && item.name}
                 </Link>
               ))}
             </div>
             {user && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="w-full px-3 py-2 flex items-center gap-3 rounded-md hover:bg-muted transition-colors">
+                  <button className={cn(
+                    "px-3 py-2 flex items-center gap-3 rounded-md hover:bg-muted transition-colors",
+                    isCollapsed ? "justify-center" : "w-full"
+                  )}>
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={user.avatar_url} />
                       <AvatarFallback>{getInitials(user.full_name)}</AvatarFallback>
                     </Avatar>
-                    <div className="flex flex-col text-left">
-                      <span className="text-sm font-medium truncate">{user.full_name}</span>
-                      <span className="text-xs text-muted-foreground truncate">{user.email}</span>
-                    </div>
+                    {!isCollapsed && (
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium truncate">{user.full_name}</span>
+                        <span className="text-xs text-muted-foreground truncate">{user.email}</span>
+                      </div>
+                    )}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-60">
@@ -111,10 +134,19 @@ export function Layout() {
 
         {/* Main content */}
         <div className="flex-1 overflow-auto">
-          <div className="h-14 border-b bg-card/50 backdrop-blur-sm flex items-center px-6">
+          <div className="h-14 border-b bg-card/50 backdrop-blur-sm flex items-center justify-between px-6">
             <h2 className="text-lg font-medium">
               {navItems.find((item) => item.path === location.pathname)?.name}
             </h2>
+            <a 
+              href="https://github.com/Anindyadeep/litefold"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Github className="h-5 w-5" />
+              <span className="hidden sm:inline">LiteFold GitHub</span>
+            </a>
           </div>
           <div className="p-6">
             <Outlet />

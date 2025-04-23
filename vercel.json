@@ -5,5 +5,12 @@
   "rewrites": [
     { "source": "/auth/callback", "destination": "/auth/callback" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "redirects": [
+    {
+      "source": "/litefold",
+      "destination": "https://litefold.vercel.app",
+      "permanent": true
+    }
   ]
 }

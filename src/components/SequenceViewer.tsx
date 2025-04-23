@@ -12,6 +12,7 @@ export interface ResidueInfo {
 interface SequenceViewerProps {
   sequence: string;
   residueData?: ResidueInfo[]; // Optional metadata about each residue
+  getResidueColor?: (index: number) => string; // Function to get color for a residue
   onResidueClick?: (index: number) => void;
   onResidueHover?: (index: number | null) => void;
 }
@@ -19,6 +20,7 @@ interface SequenceViewerProps {
 export function SequenceViewer({ 
   sequence, 
   residueData,
+  getResidueColor,
   onResidueClick, 
   onResidueHover 
 }: SequenceViewerProps) {
@@ -68,10 +70,10 @@ export function SequenceViewer({
   };
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full overflow-x-auto rounded-md bg-muted/30 p-3">
       <div className="flex flex-wrap font-mono text-sm">
         {/* Sequence numbers */}
-        <div className="flex w-full mb-1">
+        <div className="flex w-full mb-2">
           {Array.from({ length: Math.ceil(sequence.length / 10) }).map((_, i) => (
             <span key={i} className="inline-block w-[100px] text-center text-xs text-muted-foreground">
               {(i + 1) * 10}
@@ -79,25 +81,70 @@ export function SequenceViewer({
           ))}
         </div>
         
-        {/* Sequence */}
-        <div className="flex flex-wrap">
-          {sequence.split('').map((residue, index) => (
-            <button
-              key={index}
-              onClick={() => handleResidueClick(index)}
-              onMouseEnter={() => handleResidueHover(index)}
-              onMouseLeave={() => handleResidueHover(null)}
-              className={cn(
-                "w-[10px] h-[20px] text-center transition-colors cursor-pointer",
-                hoveredResidue === index && "bg-accent/50 text-accent-foreground",
-                selectedResidue === index && "bg-accent text-accent-foreground font-bold",
-                "hover:bg-accent hover:text-accent-foreground"
-              )}
-              title={getResidueTooltip(residue, index)}
-            >
-              {residue}
-            </button>
-          ))}
+        {/* Sequence with legend */}
+        <div className="flex flex-col w-full">
+          {/* Sequence display */}
+          <div className="flex flex-wrap mb-4">
+            {sequence.split('').map((residue, index) => (
+              <button
+                key={index}
+                onClick={() => handleResidueClick(index)}
+                onMouseEnter={() => handleResidueHover(index)}
+                onMouseLeave={() => handleResidueHover(null)}
+                style={{
+                  backgroundColor: getResidueColor && !hoveredResidue && selectedResidue !== index 
+                    ? getResidueColor(index) 
+                    : undefined
+                }}
+                className={cn(
+                  "w-[14px] h-[24px] text-center transition-colors cursor-pointer text-xs rounded-sm font-medium flex items-center justify-center",
+                  hoveredResidue === index && "bg-accent/80 text-accent-foreground ring-1 ring-accent",
+                  selectedResidue === index && "bg-primary text-primary-foreground font-bold ring-2 ring-primary/50",
+                  !hoveredResidue && selectedResidue !== index && getResidueColor 
+                    ? "hover:ring-1 hover:ring-primary/30 hover:brightness-90" 
+                    : "hover:bg-accent hover:text-accent-foreground"
+                )}
+                title={getResidueTooltip(residue, index)}
+              >
+                {residue}
+              </button>
+            ))}
+          </div>
+          
+          {/* Legend */}
+          {getResidueColor && (
+            <div className="flex flex-wrap gap-3 text-xs mt-2 border-t pt-2 border-muted">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#ff8f8f' }}></div>
+                <span>Hydrophobic</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#8fce8f' }}></div>
+                <span>Polar</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#ff725c' }}></div>
+                <span>Acidic</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#80b1d3' }}></div>
+                <span>Basic</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#fdb462' }}></div>
+                <span>Special</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#cccccc' }}></div>
+                <span>Other</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Help text */}
+          <div className="text-xs text-muted-foreground mt-2">
+            Click on residue to view in licorice representation • Hover to highlight
+          </div>
         </div>
       </div>
     </div>

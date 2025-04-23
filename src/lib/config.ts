@@ -3,7 +3,8 @@
  */
 
 // Default API URL for ESMFold server
-export const DEFAULT_API_URL = 'https://largely-accurate-asp.ngrok-free.app';
+// This will be set via vite.config.ts define
+export const DEFAULT_API_URL = import.meta.env.DEFAULT_BACKEND_URL || 'https://litefold-production.up.railway.app';
 
 // Determine if we're in development mode
 const isDevelopment = typeof import.meta.env !== 'undefined' && import.meta.env.DEV === true;

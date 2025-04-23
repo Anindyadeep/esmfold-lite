@@ -201,7 +201,7 @@ export default function Settings() {
                     Active Server URL
                   </p>
                   <p className="text-sm font-medium break-all">
-                    {activeServerUrl === 'Default' ? 'Default ESMFold Server' : activeServerUrl}
+                    {activeServerUrl === 'Default' ? 'Default LiteFold Server' : activeServerUrl}
                   </p>
                 </div>
               </div>

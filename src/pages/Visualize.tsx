@@ -16,6 +16,26 @@ import { Input } from '@/components/ui/input';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { SequenceViewer, ResidueInfo } from '@/components/SequenceViewer';
 
+// Amino acid property grouping for color coding
+const aminoAcidGroups = {
+  hydrophobic: ['A', 'I', 'L', 'M', 'F', 'W', 'V', 'P'],
+  polar: ['N', 'C', 'Q', 'S', 'T', 'Y'],
+  acidic: ['D', 'E'],
+  basic: ['R', 'H', 'K'],
+  special: ['G'],
+  other: ['X', 'B', 'Z', 'U', 'O']
+};
+
+// Color mapping for amino acid groups
+const getResidueColor = (code: string): string => {
+  if (aminoAcidGroups.hydrophobic.includes(code)) return '#ff8f8f'; // Red-ish
+  if (aminoAcidGroups.polar.includes(code)) return '#8fce8f'; // Green-ish  
+  if (aminoAcidGroups.acidic.includes(code)) return '#ff725c'; // Bright red
+  if (aminoAcidGroups.basic.includes(code)) return '#80b1d3'; // Blue-ish
+  if (aminoAcidGroups.special.includes(code)) return '#fdb462'; // Orange
+  return '#cccccc'; // Gray for other/unknown
+};
+
 interface MoleculeStats {
   totalAtoms: number;
   uniqueElements: string[];
@@ -306,21 +326,22 @@ function VisualizeContent() {
               
               const sequenceString = residueInfo.map(res => res.code).join('');
               
-              const handleResidueClick = (index: number) => {
-                const residueId = residueInfo[index]?.id;
-                if (residueId !== undefined) {
-                  setViewerState({
-                    ...viewerState,
-                    selectedResidues: [residueId]
-                  });
-                }
-              };
-
               return (
                 <SequenceViewer 
                   sequence={sequenceString}
                   residueData={residueInfo}
-                  onResidueClick={handleResidueClick}
+                  getResidueColor={(index) => getResidueColor(residueInfo[index]?.code || 'X')}
+                  onResidueClick={(index) => {
+                    const residueId = residueInfo[index]?.id;
+                    if (residueId !== undefined) {
+                      // Update viewer state to display the clicked residue in licorice representation
+                      setViewerState({
+                        ...viewerState,
+                        selectedResidues: [residueId],
+                        viewMode: 'licorice' // Switch to licorice view when clicking a residue
+                      });
+                    }
+                  }}
                   onResidueHover={(index) => {
                     if (index === null) {
                       // Clear selection when not hovering
@@ -346,126 +367,151 @@ function VisualizeContent() {
           </Card>
         )}
         
-        {/* 3D Viewer */}
-        <Card className="flex-1 p-0 overflow-hidden rounded-lg border bg-card shadow-sm relative aspect-square">
-          <div className="absolute inset-0">
-            <NGLViewer 
-              structures={loadedStructures}
-              viewerState={viewerState}
-            />
-          </div>
-        </Card>
-            
-        {/* Split view with Distogram and Stats side by side */}
-        <div className="grid grid-cols-2 gap-6">
-          {/* Distogram Card - Left Side */}
-          <Card className="p-4 overflow-hidden">
-            <div className="flex items-center justify-between mb-4">
-              <h5 className="text-sm font-medium">Distogram</h5>
-            </div>
-            {selectedStructure?.molecule ? (
-              <div className="h-[400px] w-full relative" ref={plotRef}>
-                <Distogram 
-                  molecule={selectedStructure.molecule!} 
-                  data={selectedStructure.metadata?.distogram}
-                  width={plotRef?.current?.offsetWidth || 500}
-                  height={380}
-                />
-              </div>
-            ) : (
-              <div className="text-center py-6 text-sm text-muted-foreground h-[400px] flex items-center justify-center">
-                Select a structure to view its distogram
-              </div>
-            )}
-          </Card>
-
-          {/* Statistics Card - Right Side */}
-          <Card className="p-4 overflow-auto max-h-[500px]">
-            <div className="flex items-center justify-between mb-4">
-              <h5 className="text-sm font-medium">Statistics</h5>
-            </div>
-            {selectedStructure?.molecule ? (
-              <div className="space-y-4">
-                {(() => {
-                  const stats = calculateMoleculeStats(selectedStructure.molecule!);
-                  
-                  return (
-                    <div key={selectedStructure.id}>
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-medium">{selectedStructure.name}</h4>
-                        <Badge variant={selectedStructure.source === 'file' ? "outline" : "secondary"}>
-                          {selectedStructure.source === 'file' ? 'File' : 'Job'}
-                        </Badge>
-                      </div>
-
-                      <Separator className="my-3" />
-                      
-                      {/* Atom Statistics */}
-                      <div className="mb-3">
-                        <h5 className="text-sm font-medium mb-1">Atom Statistics</h5>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <p className="text-muted-foreground">Total Atoms</p>
-                            <p className="font-medium">{stats.totalAtoms}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Unique Elements</p>
-                            <p className="font-medium">{stats.uniqueElements.join(', ')}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <Separator className="my-3" />
-
-                      {/* Chain Information */}
-                      <div className="mb-3">
-                        <h5 className="text-sm font-medium mb-1">Chain Information</h5>
-                        <div className="grid grid-cols-4 gap-2 text-sm font-medium mb-1">
-                          <div>Chain</div>
-                          <div>Residues</div>
-                          <div>Atoms</div>
-                          <div>% of Total</div>
-                        </div>
-                        <div className="max-h-[150px] overflow-auto pr-2">
-                          {stats.chainInfo.map(chain => (
-                            <div key={chain.chainId} className="grid grid-cols-4 gap-2 text-sm">
-                              <div>{chain.chainId}</div>
-                              <div>{chain.residueCount}</div>
-                              <div>{chain.atomCount}</div>
-                              <div>
-                                {((chain.atomCount / stats.totalAtoms) * 100).toFixed(1)}%
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <Separator className="my-3" />
-
-                      {/* Water and Ion Information */}
-                      <div>
-                        <h5 className="text-sm font-medium mb-1">Water and Ion Content</h5>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <p className="text-muted-foreground">Water Molecules</p>
-                            <p className="font-medium">{stats.waterCount}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Ion Count</p>
-                            <p className="font-medium">{stats.ionCount}</p>
-                          </div>
-                        </div>
-                      </div>
+        {/* Main visualization area with 3D Viewer and Statistics side by side */}
+        <div className="grid grid-cols-12 gap-6">
+          {/* Left side with Canvas/Distogram tabs */}
+          <div className="col-span-8">
+            <Card className="overflow-hidden">
+              <Tabs defaultValue="canvas" className="h-full">
+                <div className="flex items-center justify-between p-3 border-b">
+                  <TabsList>
+                    <TabsTrigger value="canvas">Canvas</TabsTrigger>
+                    <TabsTrigger value="distogram">Distance Matrix</TabsTrigger>
+                  </TabsList>
+                  {selectedStructure && (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs font-mono">
+                        {selectedStructure.name || 'Structure'}
+                      </Badge>
                     </div>
-                  );
-                })()}
+                  )}
+                </div>
+
+                <TabsContent value="canvas" className="m-0">
+                  <div className="aspect-square relative">
+                    <NGLViewer 
+                      structures={loadedStructures}
+                      viewerState={viewerState}
+                    />
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="distogram" className="m-0">
+                  <div className="aspect-square p-4">
+                    {selectedStructure?.molecule ? (
+                      <div className="h-full w-full relative" ref={plotRef}>
+                        <Distogram 
+                          molecule={selectedStructure.molecule!} 
+                          data={selectedStructure.metadata?.distogram}
+                          width={plotRef?.current?.offsetWidth || 500}
+                          height={plotRef?.current?.offsetHeight || 500}
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-sm text-muted-foreground h-full flex items-center justify-center">
+                        Select a structure to view its distance matrix
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </Card>
+          </div>
+          
+          {/* Statistics Card - Right side */}
+          <div className="col-span-4">
+            <Card className="p-4 overflow-auto h-full max-h-[600px] shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h5 className="text-sm font-semibold">Structure Statistics</h5>
+                {selectedStructure?.molecule && (
+                  <Badge variant={selectedStructure.source === 'file' ? "outline" : "secondary"} className="ml-2">
+                    {selectedStructure.source === 'file' ? 'File' : 'Job'}
+                  </Badge>
+                )}
               </div>
-            ) : (
-              <div className="text-center py-4 text-sm text-muted-foreground h-[400px] flex items-center justify-center">
-                Select a structure to view its statistics
-              </div>
-            )}
-          </Card>
+              
+              {selectedStructure?.molecule ? (
+                <div className="space-y-4">
+                  {(() => {
+                    const stats = calculateMoleculeStats(selectedStructure.molecule!);
+                    
+                    return (
+                      <div key={selectedStructure.id}>
+                        <div className="flex items-center mb-3">
+                          <h4 className="text-sm font-medium">{selectedStructure.name}</h4>
+                        </div>
+
+                        <Separator className="my-3" />
+                        
+                        {/* Atom Statistics */}
+                        <div className="mb-3">
+                          <h5 className="text-sm font-medium mb-2">Atom Statistics</h5>
+                          <div className="grid grid-cols-2 gap-3 text-sm bg-muted/30 p-3 rounded-md">
+                            <div className="space-y-1">
+                              <p className="text-muted-foreground">Total Atoms</p>
+                              <p className="font-medium text-lg">{stats.totalAtoms}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-muted-foreground">Unique Elements</p>
+                              <p className="font-medium">{stats.uniqueElements.join(', ')}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Separator className="my-3" />
+
+                        {/* Chain Information */}
+                        <div className="mb-3">
+                          <h5 className="text-sm font-medium mb-2">Chain Information</h5>
+                          <div className="bg-muted/30 rounded-md p-3">
+                            <div className="grid grid-cols-4 gap-2 text-sm font-medium mb-2 text-muted-foreground">
+                              <div>Chain</div>
+                              <div>Residues</div>
+                              <div>Atoms</div>
+                              <div>% of Total</div>
+                            </div>
+                            <div className="max-h-[150px] overflow-auto pr-2">
+                              {stats.chainInfo.map(chain => (
+                                <div key={chain.chainId} className="grid grid-cols-4 gap-2 text-sm py-1 border-b border-muted/20 last:border-0">
+                                  <div className="font-medium">{chain.chainId}</div>
+                                  <div>{chain.residueCount}</div>
+                                  <div>{chain.atomCount}</div>
+                                  <div>
+                                    {((chain.atomCount / stats.totalAtoms) * 100).toFixed(1)}%
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <Separator className="my-3" />
+
+                        {/* Water and Ion Information */}
+                        <div>
+                          <h5 className="text-sm font-medium mb-2">Water and Ion Content</h5>
+                          <div className="grid grid-cols-2 gap-3 text-sm bg-muted/30 p-3 rounded-md">
+                            <div className="space-y-1">
+                              <p className="text-muted-foreground">Water Molecules</p>
+                              <p className="font-medium text-lg">{stats.waterCount}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-muted-foreground">Ion Count</p>
+                              <p className="font-medium text-lg">{stats.ionCount}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-sm text-muted-foreground h-[400px] flex items-center justify-center">
+                  Select a structure to view statistics
+                </div>
+              )}
+            </Card>
+          </div>
         </div>
       </div>
     </div>

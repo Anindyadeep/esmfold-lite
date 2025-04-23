@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
+import { Github } from 'lucide-react'
 
 export default function SignIn() {
   const navigate = useNavigate()
@@ -137,6 +138,16 @@ export default function SignIn() {
               </>
             )}
           </button>
+
+          <a
+            href="https://github.com/Anindyadeep/litefold"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-center px-4 py-3 rounded-md text-sm font-medium text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 shadow-md"
+          >
+            <Github className="w-5 h-5 mr-2" />
+            View project LiteFold GitHub
+          </a>
           
           {/* About LiteFold */}
           <div className="pt-2">

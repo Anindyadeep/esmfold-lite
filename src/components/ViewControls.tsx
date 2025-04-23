@@ -68,97 +68,95 @@ export function ViewControls({
     <div className="space-y-6">
       {/* Visualization Controls Section */}
       <div className="space-y-4">
-        <h3 className="text-sm font-medium">Visualization Controls</h3>
-        <div>
-          <h4 className="text-xs font-medium mb-2">View Mode</h4>
-          <Select
-            value={viewerState.viewMode}
-            onValueChange={(value: ViewMode) => onViewModeChange(value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select view mode" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="cartoon">Cartoon</SelectItem>
-              <SelectItem value="spacefill">Spacefill</SelectItem>
-              <SelectItem value="licorice">Licorice</SelectItem>
-              <SelectItem value="surface">Surface</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">Visualization</h3>
         </div>
-
-        <div>
-          <h4 className="text-xs font-medium mb-2">Color Scheme</h4>
-          <Select
-            value={viewerState.colorScheme}
-            onValueChange={(value: ColorScheme) => onColorSchemeChange(value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select color scheme" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="DEFAULT">Default</SelectItem>
-              <SelectItem value="CHAIN">Chain</SelectItem>
-              <SelectItem value="RESIDUE">Residue</SelectItem>
-              <SelectItem value="ELEMENT">Element</SelectItem>
-              <SelectItem value="BFACTOR">B-Factor</SelectItem>
-              <SelectItem value="SEQUENCE">Sequence</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <h4 className="text-xs font-medium mb-2">Atom Size</h4>
-          <Slider
-            value={[viewerState.atomSize]}
-            onValueChange={([value]) => onAtomSizeChange(value)}
-            min={0.1}
-            max={3}
-            step={0.1}
-            className="w-full"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium">Show Ligands</label>
-            <Button
-              variant={viewerState.showLigand ? "default" : "outline"}
-              size="sm"
-              onClick={() => onLigandVisibilityChange(!viewerState.showLigand)}
+        
+        <div className="bg-muted/30 rounded-lg p-4 space-y-4">
+          <div>
+            <h4 className="text-xs font-medium mb-2 text-muted-foreground">View Mode</h4>
+            <Select
+              value={viewerState.viewMode}
+              onValueChange={(value: ViewMode) => onViewModeChange(value)}
             >
-              {viewerState.showLigand ? "Visible" : "Hidden"}
-            </Button>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select view mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cartoon">Cartoon</SelectItem>
+                <SelectItem value="spacefill">Spacefill</SelectItem>
+                <SelectItem value="licorice">Licorice</SelectItem>
+                <SelectItem value="surface">Surface</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium">Show Water/Ions</label>
-            <Button
-              variant={viewerState.showWaterIon ? "default" : "outline"}
-              size="sm"
-              onClick={() => onWaterIonVisibilityChange(!viewerState.showWaterIon)}
+          <div>
+            <h4 className="text-xs font-medium mb-2 text-muted-foreground">Color Scheme</h4>
+            <Select
+              value={viewerState.colorScheme}
+              onValueChange={(value: ColorScheme) => onColorSchemeChange(value)}
             >
-              {viewerState.showWaterIon ? "Visible" : "Hidden"}
-            </Button>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select color scheme" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DEFAULT">Default</SelectItem>
+                <SelectItem value="CHAIN">Chain</SelectItem>
+                <SelectItem value="RESIDUE">Residue</SelectItem>
+                <SelectItem value="ELEMENT">Element</SelectItem>
+                <SelectItem value="BFACTOR">B-Factor</SelectItem>
+                <SelectItem value="SEQUENCE">Sequence</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">Ligands</label>
+              <Button
+                variant={viewerState.showLigand ? "default" : "outline"}
+                size="sm"
+                onClick={() => onLigandVisibilityChange(!viewerState.showLigand)}
+                className="min-w-20"
+              >
+                {viewerState.showLigand ? "Visible" : "Hidden"}
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">Water/Ions</label>
+              <Button
+                variant={viewerState.showWaterIon ? "default" : "outline"}
+                size="sm"
+                onClick={() => onWaterIonVisibilityChange(!viewerState.showWaterIon)}
+                className="min-w-20"
+              >
+                {viewerState.showWaterIon ? "Visible" : "Hidden"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Structure Info Section */}
       <div className="space-y-3">
-        <h3 className="text-sm font-medium">Structure Info</h3>
-        <p className="text-xs text-muted-foreground">
-          Currently loaded structures and their sources
-        </p>
-        <Separator />
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">Loaded Structures</h3>
+          <Badge variant="outline" className="text-xs">
+            {loadedStructures.length}
+          </Badge>
+        </div>
         
-        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+        <div className="bg-muted/30 rounded-lg p-3 space-y-2 max-h-[250px] overflow-y-auto">
           {loadedStructures.length > 0 ? (
             loadedStructures.map((structure, index) => (
               <div 
                 key={structure.id} 
-                className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-sm ${
-                  index === selectedMoleculeIndex ? 'bg-accent' : 'hover:bg-muted'
+                className={`flex items-center justify-between p-2 rounded-md cursor-pointer text-sm transition-colors ${
+                  index === selectedMoleculeIndex 
+                  ? 'bg-accent text-accent-foreground' 
+                  : 'hover:bg-muted'
                 }`}
                 onClick={() => handleStructureSelect(index)}
               >
@@ -188,15 +186,20 @@ export function ViewControls({
       {/* Uploaded Files Section */}
       {molecules.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">Uploaded Files</h3>
-          <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium">Uploaded Files</h3>
+            <Badge variant="outline" className="text-xs">
+              {molecules.length}
+            </Badge>
+          </div>
+          <div className="bg-muted/30 rounded-lg p-3 space-y-1">
             {molecules.map((mol, index) => (
               <div
                 key={mol.file.name + index}
-                className={`flex items-center justify-between p-2 rounded-lg text-sm ${
+                className={`flex items-center justify-between p-2 rounded-md text-sm transition-colors ${
                   selectedMoleculeIndex === index
-                    ? 'bg-purple-100 dark:bg-purple-900'
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'hover:bg-muted'
                 }`}
               >
                 <button
@@ -208,7 +211,7 @@ export function ViewControls({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-red-500 hover:text-red-700"
+                  className="text-red-500 hover:text-red-700 hover:bg-red-100/20"
                   onClick={(e) => handleDeleteFile(index, e)}
                 >
                   <svg
