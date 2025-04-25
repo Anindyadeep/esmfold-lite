@@ -24,22 +24,9 @@ export function SequenceViewer({
   onResidueClick, 
   onResidueHover 
 }: SequenceViewerProps) {
-  const [selectedResidue, setSelectedResidue] = useState<number | null>(null);
-  const [hoveredResidue, setHoveredResidue] = useState<number | null>(null);
 
-  const handleResidueClick = (index: number) => {
-    setSelectedResidue(index);
-    if (onResidueClick) {
-      onResidueClick(index);
-    }
-  };
+  // Non-interactive: no selection or hover
 
-  const handleResidueHover = (index: number | null) => {
-    setHoveredResidue(index);
-    if (onResidueHover) {
-      onResidueHover(index);
-    }
-  };
 
   // Generate tooltip text for a residue
   const getResidueTooltip = (residue: string, index: number): string => {
@@ -83,31 +70,16 @@ export function SequenceViewer({
         
         {/* Sequence with legend */}
         <div className="flex flex-col w-full">
-          {/* Sequence display */}
+        {/* Sequence display (static) */}
           <div className="flex flex-wrap mb-4">
             {sequence.split('').map((residue, index) => (
-              <button
+              <span
                 key={index}
-                onClick={() => handleResidueClick(index)}
-                onMouseEnter={() => handleResidueHover(index)}
-                onMouseLeave={() => handleResidueHover(null)}
-                style={{
-                  backgroundColor: getResidueColor && !hoveredResidue && selectedResidue !== index 
-                    ? getResidueColor(index) 
-                    : undefined
-                }}
-                className={cn(
-                  "w-[14px] h-[24px] text-center transition-colors cursor-pointer text-xs rounded-sm font-medium flex items-center justify-center",
-                  hoveredResidue === index && "bg-accent/80 text-accent-foreground ring-1 ring-accent",
-                  selectedResidue === index && "bg-primary text-primary-foreground font-bold ring-2 ring-primary/50",
-                  !hoveredResidue && selectedResidue !== index && getResidueColor 
-                    ? "hover:ring-1 hover:ring-primary/30 hover:brightness-90" 
-                    : "hover:bg-accent hover:text-accent-foreground"
-                )}
-                title={getResidueTooltip(residue, index)}
+                style={{ backgroundColor: getResidueColor ? getResidueColor(index) : undefined }}
+                className="w-[14px] h-[24px] text-center text-xs rounded-sm font-medium flex items-center justify-center"
               >
                 {residue}
-              </button>
+              </span>
             ))}
           </div>
           
@@ -141,10 +113,6 @@ export function SequenceViewer({
             </div>
           )}
           
-          {/* Help text */}
-          <div className="text-xs text-muted-foreground mt-2">
-            Click on residue to view in licorice representation • Hover to highlight
-          </div>
         </div>
       </div>
     </div>

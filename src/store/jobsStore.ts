@@ -31,6 +31,7 @@ interface JobsState {
   fetchJobs: () => Promise<void>;
   updateJobStatus: (jobId: string) => Promise<void>;
   deleteJob: (jobId: string) => Promise<void>;
+  isLoading: boolean;
 }
 
 const initialFormData: JobFormData = {
@@ -42,6 +43,7 @@ const initialFormData: JobFormData = {
 
 export const useJobsStore = create<JobsState>((set, get) => ({
   jobs: [],
+  isLoading: false,
   formData: initialFormData,
   setJobs: (jobs) => set({ jobs }),
   addJob: (job) => set((state) => ({ jobs: [...state.jobs, job] })),
@@ -123,6 +125,7 @@ export const useJobsStore = create<JobsState>((set, get) => ({
   },
 
   fetchJobs: async () => {
+    set({ isLoading: true });
     try {
       // Get current user
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -144,6 +147,8 @@ export const useJobsStore = create<JobsState>((set, get) => ({
       setTimeout(() => {
         toast.error('Failed to fetch jobs');
       }, 0);
+    } finally {
+      set({ isLoading: false });
     }
   },
 

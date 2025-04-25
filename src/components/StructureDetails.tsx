@@ -2,6 +2,9 @@ import React from 'react';
 import { Molecule } from '@/utils/pdbParser';
 import { Card } from './ui/card';
 import { Separator } from './ui/separator';
+import { Button } from './ui/button';
+import { Trash2 } from 'lucide-react';
+import { Badge } from './ui/badge';
 
 interface MoleculeStats {
   totalAtoms: number;
@@ -76,13 +79,43 @@ const calculateMoleculeStats = (molecule: Molecule): MoleculeStats => {
 interface StructureDetailsProps {
   molecule: Molecule;
   distogram?: number[][];
+  source?: 'file' | 'job';
+  name?: string;
+  onDelete?: () => void;
 }
 
-export function StructureDetails({ molecule, distogram }: StructureDetailsProps) {
+export function StructureDetails({ 
+  molecule, 
+  distogram, 
+  source = 'file',
+  name = 'Structure',
+  onDelete 
+}: StructureDetailsProps) {
   const stats = calculateMoleculeStats(molecule);
 
   return (
     <div className="space-y-6">
+      {/* Header with structure name and delete button */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <h3 className="text-base font-semibold">{name}</h3>
+          <Badge variant={source === 'file' ? "outline" : "secondary"}>
+            {source}
+          </Badge>
+        </div>
+        {source === 'job' && onDelete && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            <span className="text-xs">Remove</span>
+          </Button>
+        )}
+      </div>
+
       {/* Atom Statistics */}
       <div>
         <h4 className="text-sm font-medium mb-2">Atom Statistics</h4>

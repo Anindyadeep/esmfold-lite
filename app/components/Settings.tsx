@@ -8,7 +8,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from "../../src/components/ui/card";
 import {
   Select,
@@ -17,12 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../src/components/ui/select";
-import { Input } from "../../src/components/ui/input";
 import { Button } from "../../src/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../../src/components/ui/avatar";
-import { AlertCircle, CheckCircle2, Server, Settings2 } from "lucide-react";
+import { CheckCircle2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "../../src/components/ui/alert";
 import { DEFAULT_API_URL, ServerType } from '../../src/lib/config';
+import { supabase } from '../../src/lib/supabase';
 
 export default function Settings() {
   const [serverType, setServerType] = useState<ServerType>('default');
@@ -32,6 +31,50 @@ export default function Settings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [connectionError, setConnectionError] = useState('');
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [jobStats, setJobStats] = useState({
+    successful: 0,
+    processing: 0,
+    pending: 0,
+    failed: 0
+  });
+
+  // Load user data and job statistics
+  useEffect(() => {
+    const fetchUserAndStats = async () => {
+      // Get user
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+
+      // Get job statistics
+      if (user) {
+        const { data: jobs } = await supabase
+          .from('litefold-jobs')
+          .select('status')
+          .eq('user_id', user.id);
+
+        if (jobs) {
+          const stats = {
+            successful: 0,
+            processing: 0,
+            pending: 0,
+            failed: 0
+          };
+
+          jobs.forEach(job => {
+            if (job.status === 'successful') stats.successful++;
+            else if (job.status === 'processing') stats.processing++;
+            else if (job.status === 'pending') stats.pending++;
+            else if (job.status === 'crashed') stats.failed++;
+          });
+
+          setJobStats(stats);
+        }
+      }
+    };
+
+    fetchUserAndStats();
+  }, []);
 
   // Load saved settings on component mount
   useEffect(() => {
@@ -128,145 +171,166 @@ export default function Settings() {
     }
   };
 
+  const getInitials = (name?: string) => {
+    if (!name) return '??';
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
-    <div className="flex flex-col space-y-10">
-      <div className="flex flex-col space-y-4">
-        <div className="flex items-center space-x-2">
-          <Settings2 className="h-6 w-6 text-accent" />
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        </div>
-        <p className="text-muted-foreground text-lg max-w-2xl">
-          Manage your account and application preferences
-        </p>
+    <div className="max-w-7xl mx-auto space-y-6 p-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <p className="text-muted-foreground mt-1">Manage your account and application preferences</p>
       </div>
 
-      <div className="grid gap-8">
-        {/* Profile Section */}
-        <Card className="overflow-hidden border-border/60 hover:border-accent/20 transition-colors">
-          <div className="absolute inset-0 bg-gradient-to-r from-accent/5 to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center space-x-2">
-              <span>Profile Information</span>
-            </CardTitle>
-            <CardDescription>
-              Your personal information and preferences
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
-            <Avatar className="h-20 w-20 border-2 border-accent/20">
-              <AvatarImage src="https://github.com/shadcn.png" alt="Profile" />
-              <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground">JD</AvatarFallback>
-            </Avatar>
-            <div className="space-y-2 text-center sm:text-left">
-              <h3 className="text-xl font-medium">John Doe</h3>
-              <p className="text-sm text-muted-foreground">john.doe@example.com</p>
-              <div className="flex gap-2 justify-center sm:justify-start">
-                <Button variant="outline" size="sm" className="btn-hover-effect">
-                  Edit Profile
-                </Button>
-                <Button variant="secondary" size="sm" className="btn-hover-effect">
-                  Change Avatar
-                </Button>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column */}
+        <div className="space-y-6">
+          {/* 1. Profile Information Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Information</CardTitle>
+              <CardDescription>Your personal information and account details</CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center space-x-6">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={user?.user_metadata?.avatar_url} alt="Avatar" />
+                <AvatarFallback>{getInitials(user?.user_metadata?.full_name)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <h3 className="text-xl font-semibold">{user?.user_metadata?.full_name || 'User'}</h3>
+                <p className="text-sm text-muted-foreground">{user?.email}</p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Server URL Section */}
-        <Card className="overflow-hidden border-border/60 hover:border-accent/20 transition-colors">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center space-x-2">
-              <Server className="h-5 w-5 text-accent" />
-              <span>Server Configuration</span>
-            </CardTitle>
-            <CardDescription>
-              Configure the ESMFold server connection settings
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium leading-none">
-                Server URL
-              </label>
-              <Select
-                value={serverType}
-                onValueChange={(value: ServerType) => {
-                  setServerType(value);
-                  setSaveSuccess(false);
-                  setConnectionError('');
-                }}
-              >
-                <SelectTrigger className="w-full input-focus-ring">
-                  <SelectValue placeholder="Select server type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default" className="transition-colors hover:bg-accent/10">Default Server</SelectItem>
-                  <SelectItem value="custom" className="transition-colors hover:bg-accent/10">Custom Server</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          {/* 2. Job Statistics Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Job Statistics</CardTitle>
+              <CardDescription>Basic breakdown of your jobs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Successful</p>
+                  <p className="text-2xl font-semibold text-green-500">{jobStats.successful}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Processing</p>
+                  <p className="text-2xl font-semibold text-blue-500">{jobStats.processing}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Pending</p>
+                  <p className="text-2xl font-semibold text-yellow-500">{jobStats.pending}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Failed</p>
+                  <p className="text-2xl font-semibold text-red-500">{jobStats.failed}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-            {serverType === 'custom' && (
-              <div className="space-y-4 animate-in">
+        {/* Right Column */}
+        <div>
+          {/* 3. Server Configuration Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Server Configuration</CardTitle>
+              <CardDescription>Current server settings and status</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Current Server Info Section */}
+              <div className="space-y-4 p-4 bg-muted/30 rounded-md">
+                <h3 className="text-sm font-medium">Active Configuration</h3>
+                <div>
+                  <div className="mb-1 text-sm text-muted-foreground">Server Type</div>
+                  <div className="font-medium">{serverType === 'default' ? 'default' : 'custom'}</div>
+                </div>
+                <div>
+                  <div className="mb-1 text-sm text-muted-foreground">Server URL</div>
+                  <div className="font-medium">
+                    {serverType === 'default' ? 'Default' : (savedUrl || 'Not configured')}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Configuration Section */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">Change Configuration</h3>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium leading-none">
-                    Custom URL
-                  </label>
-                  <Input
-                    placeholder="Enter custom server URL (e.g., https://example.com)"
-                    value={customUrl}
-                    onChange={(e) => {
-                      setCustomUrl(e.target.value);
+                  <label className="text-sm text-muted-foreground">Choose default or custom server</label>
+                  <Select
+                    value={serverType}
+                    onValueChange={(value: ServerType) => {
+                      setServerType(value);
                       setSaveSuccess(false);
                       setConnectionError('');
                     }}
-                    className="input-focus-ring"
-                  />
-                  {urlError && (
-                    <p className="text-xs text-destructive mt-1">{urlError}</p>
-                  )}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select server type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Default</SelectItem>
+                      <SelectItem value="custom">Custom Server</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                
+                {serverType === 'custom' && (
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">Custom URL</label>
+                    <input
+                      type="text"
+                      placeholder="Enter custom server URL"
+                      value={customUrl}
+                      onChange={(e) => {
+                        setCustomUrl(e.target.value);
+                        setSaveSuccess(false);
+                        setConnectionError('');
+                      }}
+                      className="w-full p-2 border rounded"
+                    />
+                    <Button 
+                      onClick={handleSaveUrl} 
+                      className="w-full"
+                      disabled={isCheckingConnection}
+                    >
+                      {isCheckingConnection ? 'Testing Connection...' : 'Save Configuration'}
+                    </Button>
+                  </div>
+                )}
+                
+                {saveSuccess && (
+                  <Alert className="bg-success/10 border-success/30">
+                    <CheckCircle2 className="h-4 w-4 text-success" />
+                    <AlertDescription className="text-success">
+                      Configuration saved successfully
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
+                {connectionError && (
+                  <Alert className="bg-destructive/10 border-destructive/30">
+                    <AlertCircle className="h-4 w-4 text-destructive" />
+                    <AlertDescription className="text-destructive">
+                      {connectionError}
+                      <div className="mt-1 font-medium">Reverted to default server.</div>
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
-            )}
-          </CardContent>
-          <CardFooter className="flex flex-col items-start gap-4 pt-2">
-            <Button 
-              onClick={handleSaveUrl} 
-              className="w-full sm:w-auto btn-hover-effect bg-gradient-to-r from-primary to-accent hover:shadow-sm"
-              disabled={isCheckingConnection}
-            >
-              {isCheckingConnection ? 'Testing Connection...' : 'Save Configuration'}
-            </Button>
-            
-            {saveSuccess && (
-              <Alert className="bg-success/10 border-success/30 animate-in">
-                <CheckCircle2 className="h-4 w-4 text-success" />
-                <AlertDescription className="text-success">
-                  Server configuration saved successfully
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            {connectionError && (
-              <Alert className="bg-destructive/10 border-destructive/30 animate-in">
-                <AlertCircle className="h-4 w-4 text-destructive" />
-                <AlertDescription className="text-destructive">
-                  {connectionError}
-                  <div className="mt-1 font-medium">Reverted to default server.</div>
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            <div className="w-full rounded-lg border bg-card p-4 glass-effect">
-              <h4 className="text-sm font-medium leading-none mb-2">Current Server Configuration</h4>
-              <p className="text-sm text-muted-foreground break-all">
-                {serverType === 'default' ? 
-                  <span>Using default server: <span className="font-medium text-foreground">{DEFAULT_API_URL}</span></span> : 
-                  (savedUrl ? <span>Using custom server: <span className="font-medium text-foreground">{savedUrl}</span></span> : 'No custom server configured')}
-              </p>
-            </div>
-          </CardFooter>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

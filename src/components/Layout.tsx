@@ -15,6 +15,8 @@ import {
 import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Button } from "@/components/ui/button";
+import { getApiUrl } from "@/lib/config";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const navItems = [
   { name: "Jobs", path: "/", icon: Home },
@@ -25,6 +27,7 @@ const navItems = [
 export function Layout() {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('offline');
   const [user, setUser] = useState<{
     email?: string;
     avatar_url?: string;
@@ -44,6 +47,31 @@ export function Layout() {
     };
 
     fetchUserData();
+  }, []);
+
+  // Check server status
+  useEffect(() => {
+    const checkServerStatus = async () => {
+      try {
+        const apiUrl = getApiUrl();
+        const response = await fetch(`${apiUrl}/health`, { 
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        
+        setServerStatus(response.ok ? 'online' : 'offline');
+      } catch (error) {
+        setServerStatus('offline');
+      }
+    };
+
+    // Check initially
+    checkServerStatus();
+    
+    // Set up polling interval
+    const intervalId = setInterval(checkServerStatus, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(intervalId);
   }, []);
 
   const getInitials = (name?: string) => {
@@ -73,7 +101,26 @@ export function Layout() {
           isCollapsed ? "w-16" : "w-64"
         )}>
           <div className="flex h-14 items-center border-b px-4 justify-between">
-            {!isCollapsed && <h1 className="text-lg font-semibold tracking-tight">LiteFold</h1>}
+            {!isCollapsed && (
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-semibold tracking-tight">LiteFold</h1>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div 
+                        className={cn(
+                          "h-2.5 w-2.5 rounded-full",
+                          serverStatus === 'online' ? "bg-green-500" : "bg-red-500"
+                        )}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{serverStatus === 'online' ? 'Server running' : 'Server offline'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            )}
             <Button
               variant="ghost"
               size="icon"

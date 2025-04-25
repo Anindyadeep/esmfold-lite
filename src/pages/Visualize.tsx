@@ -16,7 +16,9 @@ import { Distogram } from '@/components/Distogram';
 import { Input } from '@/components/ui/input';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { SequenceViewer, ResidueInfo } from '@/components/SequenceViewer';
-import { Maximize, Minimize } from 'lucide-react';
+import { Maximize, Minimize, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 // Amino acid property grouping for color coding
 const aminoAcidGroups = {
@@ -108,6 +110,60 @@ const calculateMoleculeStats = (molecule: Molecule): MoleculeStats => {
   return stats;
 };
 
+// Add this component to display the loaded structures with delete buttons
+function LoadedStructuresList({ 
+  structures, 
+  onSelectStructure, 
+  onDeleteStructure,
+  selectedStructureId
+}) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-medium">Loaded Structures</h3>
+        <Badge>{structures.length}</Badge>
+      </div>
+      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+        {structures.length === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-2">
+            No structures loaded
+          </div>
+        ) : (
+          structures.map((structure, index) => (
+            <div 
+              key={structure.id} 
+              className={`flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer ${structure.id === selectedStructureId ? 'bg-muted/50 border border-muted-foreground/20' : ''}`}
+              onClick={() => onSelectStructure(index)}
+            >
+              <div className="flex items-center space-x-2">
+                <Badge variant={structure.source === 'file' ? "outline" : "secondary"} className="px-1.5 py-0 text-xs">
+                  {structure.source === 'file' ? 'file' : 'job'}
+                </Badge>
+                <span className="text-sm truncate max-w-[160px]">{structure.name}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <span className="text-xs text-muted-foreground">{structure.molecule?.atoms.length || 0} atoms</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteStructure(index, structure);
+                  }}
+                  title="Remove structure"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function VisualizeContent() {
   const {
     files,
@@ -120,6 +176,7 @@ function VisualizeContent() {
     addLoadedStructures,
     setViewerState,
     deleteFile,
+    deleteLoadedStructure,
     getSelectedStructure
   } = useVisualizeStore();
   
@@ -318,6 +375,34 @@ function VisualizeContent() {
     selectedStructure: selectedStructure?.id || 'none'
   });
 
+  // Add the handler for deleting a structure
+  const handleDeleteStructure = useCallback((index: number, structure: any) => {
+    console.log(`Visualize: About to delete structure at index ${index}:`, structure.id);
+    
+    // Delete structure directly without confirmation prompt
+    deleteLoadedStructure(index);
+    
+    // Show success message for all structures
+    if (structure.source === 'job') {
+      toast.success('Structure removed from visualization');
+    }
+    
+    // If we just deleted the selected structure, select another one if available
+    if (selectedFileIndex === index) {
+      if (loadedStructures.length > 1) {
+        // Select the previous structure, or the first one if we deleted the first
+        const newIndex = index === 0 ? 0 : index - 1;
+        setSelectedFileIndex(newIndex);
+      } else {
+        // If no structures left, clear selection
+        setSelectedFileIndex(null);
+      }
+    } else if (selectedFileIndex !== null && selectedFileIndex > index) {
+      // If we deleted a structure before the selected one, adjust the index
+      setSelectedFileIndex(selectedFileIndex - 1);
+    }
+  }, [deleteLoadedStructure, loadedStructures.length, selectedFileIndex, setSelectedFileIndex]);
+
   return (
     <div className="grid grid-cols-12 gap-6">
       {/* Left sidebar */}
@@ -329,6 +414,14 @@ function VisualizeContent() {
         <Card className="p-4">
           <JobSelector />
         </Card>
+        
+        {/* Add the LoadedStructuresList component */}
+        <LoadedStructuresList 
+          structures={loadedStructures}
+          onSelectStructure={handleStructureSelect}
+          onDeleteStructure={handleDeleteStructure}
+          selectedStructureId={selectedStructure?.id}
+        />
         
         <Card className="p-4">
           <ViewControls
