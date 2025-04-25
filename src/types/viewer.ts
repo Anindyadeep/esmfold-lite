@@ -1,4 +1,4 @@
-export type ViewMode = 'cartoon' | 'spacefill' | 'licorice' | 'surface';
+export type ViewMode = 'default' | 'cartoon' | 'spacefill' | 'licorice' | 'surface';
 
 export type ColorScheme = 'DEFAULT' | 'CHAIN' | 'RESIDUE' | 'ELEMENT' | 'BFACTOR' | 'SEQUENCE';
 

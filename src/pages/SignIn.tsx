@@ -163,7 +163,7 @@ export default function SignIn() {
       </div>
       
       {/* Custom CSS for enhanced background effects */}
-      <style jsx>{`
+      <style>{`
         .bg-pattern {
           background-blend-mode: soft-light;
         }

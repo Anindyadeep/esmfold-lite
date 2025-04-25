@@ -162,9 +162,9 @@ export default function Jobs() {
                     <SelectValue placeholder="Select a model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ESMFold">ESMFold</SelectItem>
-                    <SelectItem value="Proteinx" disabled>
-                      Proteinx (Coming soon)
+                    <SelectItem value="ESMFold">ESM-3</SelectItem>
+                    <SelectItem value="alphafold2" disabled>
+                      AlphaFold2 (Coming soon)
                     </SelectItem>
                     <SelectItem value="Chai-1" disabled>
                       Chai-1 (Coming soon)

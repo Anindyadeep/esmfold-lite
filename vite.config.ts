@@ -50,6 +50,14 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
+    css: {
+      preprocessorOptions: {
+        scss: {
+          // Include support for scss from node_modules
+          additionalData: '@import "./src/styles/mol-star-variables.scss";',
+        },
+      },
+    },
     // Ensure we only build what's needed
     build: {
       sourcemap: mode !== 'production',

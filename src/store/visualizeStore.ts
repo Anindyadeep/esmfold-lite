@@ -41,7 +41,7 @@ export const useVisualizeStore = create<VisualizeState>((set, get) => ({
   selectedFileIndex: null,
   loadedStructures: [],
   viewerState: {
-    viewMode: 'cartoon',
+    viewMode: 'default',
     colorScheme: 'DEFAULT',
     atomSize: 1.0,
     showLigand: true,
@@ -66,11 +66,27 @@ export const useVisualizeStore = create<VisualizeState>((set, get) => ({
     // Create updated structures array
     const updatedStructures = [...state.loadedStructures, ...filteredNewStructures];
     
-    // Ensure we have a valid selected index if adding first structure
+    // For job structures, preserve the current selection if it's valid
+    // Only auto-select the first structure if no selection exists
     let newSelectedIndex = state.selectedFileIndex;
+    
     if (state.selectedFileIndex === null && updatedStructures.length > 0) {
       newSelectedIndex = 0;
+      console.log('Auto-selecting first structure as none was selected');
+    } else if (state.selectedFileIndex !== null && state.selectedFileIndex >= updatedStructures.length) {
+      // If the current selection is out of bounds, select the first structure
+      newSelectedIndex = 0;
+      console.log('Current selection out of bounds, resetting to first structure');
+    } else {
+      console.log('Preserving current selection at index:', state.selectedFileIndex);
     }
+    
+    console.log('Updated structures array:', {
+      before: state.loadedStructures.length,
+      added: filteredNewStructures.length,
+      after: updatedStructures.length,
+      selectedIndex: newSelectedIndex
+    });
     
     return { 
       loadedStructures: updatedStructures,
@@ -80,23 +96,40 @@ export const useVisualizeStore = create<VisualizeState>((set, get) => ({
   removeStructureById: (id) => set((state) => {
     // Find the index of the structure to remove
     const index = state.loadedStructures.findIndex(s => s.id === id);
-    if (index === -1) return state; // Structure not found
+    if (index === -1) {
+      console.warn(`Structure with ID '${id}' not found`);
+      return state; // Structure not found
+    }
+    
+    console.log(`Removing structure with ID '${id}' at index ${index}`);
+    console.log('Structure details:', {
+      id: state.loadedStructures[index].id,
+      name: state.loadedStructures[index].name,
+      source: state.loadedStructures[index].source
+    });
     
     // Create a new array without the removed structure
     const newStructures = [...state.loadedStructures];
     newStructures.splice(index, 1);
+    
+    console.log(`After removal: ${newStructures.length} structures remain`);
     
     // Update selected index if needed
     let newSelectedIndex = state.selectedFileIndex;
     if (newStructures.length === 0) {
       // No structures left
       newSelectedIndex = null;
+      console.log('No structures left, setting selectedFileIndex to null');
     } else if (state.selectedFileIndex === index) {
       // The selected structure was removed, select the first one
       newSelectedIndex = 0;
+      console.log('Selected structure was removed, setting selectedFileIndex to 0');
     } else if (state.selectedFileIndex !== null && state.selectedFileIndex > index) {
       // Selected index is after the removed one, decrement it
       newSelectedIndex = state.selectedFileIndex - 1;
+      console.log(`Selected index was after removed one, decrementing from ${state.selectedFileIndex} to ${newSelectedIndex}`);
+    } else {
+      console.log(`Selected index (${state.selectedFileIndex}) not affected by removal at index ${index}`);
     }
     
     return {
@@ -121,14 +154,23 @@ export const useVisualizeStore = create<VisualizeState>((set, get) => ({
       return state;
     }
 
+    console.log(`Deleting file at index ${index}`);
     const newFiles = [...state.files];
     const fileToDelete = newFiles[index];
+    console.log('File to delete:', fileToDelete.file.name);
     newFiles.splice(index, 1);
     
-    // Remove the corresponding structure if it exists
+    // Get current structure IDs for debugging
+    const structureIds = state.loadedStructures.map(s => s.id);
+    console.log('Current structure IDs:', structureIds);
+    
+    // Fix: Use includes instead of exact match to find the structure
+    // Structure IDs are created as `file-${file.name}-${Date.now()}`
     const structureIndex = state.loadedStructures.findIndex(
-      s => s.source === 'file' && s.id === fileToDelete.file.name
+      s => s.source === 'file' && s.id.includes(fileToDelete.file.name)
     );
+    
+    console.log(`File: ${fileToDelete.file.name}, Found structure at index: ${structureIndex}`);
     
     // If structure wasn't found, just update files
     if (structureIndex === -1) {
@@ -152,21 +194,33 @@ export const useVisualizeStore = create<VisualizeState>((set, get) => ({
     
     // Create a new array without the removed structure
     const newStructures = [...state.loadedStructures];
+    const structureToRemove = newStructures[structureIndex];
+    console.log('Structure being removed:', structureToRemove.id);
     newStructures.splice(structureIndex, 1);
+    
+    console.log(`Removed structure. Old length: ${state.loadedStructures.length}, New length: ${newStructures.length}`);
+    console.log('Remaining structure IDs:', newStructures.map(s => s.id));
     
     // Update selected index properly
     let newSelectedIndex = state.selectedFileIndex;
     if (newStructures.length === 0) {
       // No structures left
       newSelectedIndex = null;
+      console.log('No structures left, setting selectedFileIndex to null');
     } else if (state.selectedFileIndex === structureIndex) {
       // The selected structure was removed, select the first one
       newSelectedIndex = 0;
+      console.log('Selected structure was removed, setting selectedFileIndex to 0');
     } else if (state.selectedFileIndex !== null && state.selectedFileIndex > structureIndex) {
       // Selected index is after the removed one, decrement it
       newSelectedIndex = state.selectedFileIndex - 1;
+      console.log(`Selected index was after removed one, decrementing from ${state.selectedFileIndex} to ${newSelectedIndex}`);
+    } else {
+      console.log(`Selected index (${state.selectedFileIndex}) not affected by removal at index ${structureIndex}`);
     }
 
+    console.log(`Updated selectedFileIndex from ${state.selectedFileIndex} to ${newSelectedIndex}`);
+    
     return {
       files: newFiles,
       loadedStructures: newStructures,

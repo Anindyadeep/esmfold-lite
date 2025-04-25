@@ -14,7 +14,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "ESMFold Lite",
   description: "A lightweight interface for ESMFold protein structure prediction",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://esmfold-lite.vercel.app'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://litefold.vercel.app'),
   robots: {
     index: true,
     follow: true,

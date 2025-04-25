@@ -1,0 +1,9 @@
+// MolStar variables
+// This file is imported in all SCSS files for MolStar styling
+
+// Color variables
+$mol-accent-color: var(--accent-color, #007aff);
+$mol-background-color: var(--background-color, rgba(255, 255, 255, 0.8));
+$mol-border-color: var(--border-color, rgba(0, 0, 0, 0.15));
+$mol-text-color: var(--text-color, rgba(0, 0, 0, 0.9));
+$mol-muted-color: var(--muted-color, rgba(0, 0, 0, 0.6)); 

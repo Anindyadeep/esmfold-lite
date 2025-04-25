@@ -1,12 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { NGLViewer } from './NGLViewer';
-import { ViewerControls } from './ViewerControls';
-import { ViewerState } from '@/types/viewer';
-import * as NGL from 'ngl';
+import { VisualizationWrapper } from './VisualizationWrapper';
+import { ViewControls } from '@/components/ViewControls';
+import { ViewerState, ViewMode, ColorScheme } from '@/types/viewer';
 
 export function StructureViewer() {
   const [pdbData, setPdbData] = useState<string>();
   const [viewerState, setViewerState] = useState<ViewerState>({
+    viewMode: 'default' as ViewMode,
+    colorScheme: 'DEFAULT' as ColorScheme,
     atomSize: 1.0,
     showLigand: true,
     showWaterIon: false,
@@ -22,6 +23,12 @@ export function StructureViewer() {
     }
   };
 
+  const handleFilesUploaded = async (files: File[]) => {
+    if (files.length > 0) {
+      await handleFileUpload(files[0]);
+    }
+  };
+
   const handleAtomSizeChange = (size: number) => {
     setViewerState(prev => ({ ...prev, atomSize: size }));
   };
@@ -34,26 +41,25 @@ export function StructureViewer() {
     setViewerState(prev => ({ ...prev, showWaterIon: visible }));
   };
 
-  const handleCenter = () => {
-    if (stageRef.current) {
-      stageRef.current.autoView(1000);
-    }
-  };
-
   return (
     <div className="relative w-full h-full">
-      <NGLViewer
-        pdbData={pdbData}
+      <VisualizationWrapper
+        structures={pdbData ? [{ id: 'uploaded.pdb', pdbData, name: 'Uploaded File', source: 'file' }] : []}
         viewerState={viewerState}
         ref={stageRef}
       />
-      <ViewerControls
+      <ViewControls
         viewerState={viewerState}
+        molecules={[]}
+        selectedMoleculeIndex={null}
+        onViewModeChange={(mode) => setViewerState(prev => ({ ...prev, viewMode: mode }))}
+        onColorSchemeChange={(scheme) => setViewerState(prev => ({ ...prev, colorScheme: scheme }))}
         onAtomSizeChange={handleAtomSizeChange}
         onLigandVisibilityChange={handleLigandVisibilityChange}
         onWaterIonVisibilityChange={handleWaterIonVisibilityChange}
-        onCenter={handleCenter}
-        onFileUpload={handleFileUpload}
+        onFilesUploaded={handleFilesUploaded}
+        onDeleteMolecule={() => {}} // No-op since we don't have molecules to delete
+        onSelectMolecule={() => {}} // No-op since we don't have molecules to select
       />
     </div>
   );

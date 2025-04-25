@@ -1,0 +1,131 @@
+/* Mol* CSS styles */
+.msp-plugin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+}
+
+.msp-plugin-content {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.msp-viewport-controls {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 5px;
+  backdrop-filter: blur(4px);
+  z-index: 50;
+}
+
+.msp-sequence-viewer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  background-color: #FFFFFF;
+  z-index: 10;
+}
+
+.msp-sequence-wrapper {
+  overflow: auto;
+  max-height: 120px;
+}
+
+/* Modify viewer layout for better UI experience */
+.msp-layout-expanded .msp-layout-region.msp-layout-right {
+  display: none;
+}
+
+.msp-layout-expanded .msp-layout-region.msp-layout-left {
+  width: 0;
+}
+
+.msp-layout-expanded .msp-layout-region.msp-layout-main {
+  left: 0;
+  right: 0;
+}
+
+/* Hide UI controls we don't need */
+.msp-layout-expanded .msp-layout-hide-right { 
+  display: none; 
+}
+
+.msp-layout-expanded .msp-layout-hide-left { 
+  display: none; 
+}
+
+.msp-layout-top {
+  display: none !important;
+}
+
+/* Better controls background */
+.msp-viewport-controls-panel {
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(5px);
+  border-radius: 8px !important;
+}
+
+/* Reset canvas styles */
+.msp-plugin-content canvas {
+  outline: none !important;
+}
+
+/* Customize scrollbars */
+.msp-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.msp-scrollbar::-webkit-scrollbar-track {
+  background: rgba(136, 136, 136, 0.1);
+}
+
+.msp-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(136, 136, 136, 0.5);
+  border-radius: 3px;
+}
+
+/* Make some controls transparent when not hovered */
+.msp-viewport-controls-buttons {
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.msp-viewport-controls-buttons:hover {
+  opacity: 1;
+}
+
+/* Remove default Mol* branding */
+.msp-logo {
+  display: none;
+}
+
+/* Fix background colors to match theme */
+canvas {
+  background-color: #ffffff !important; 
+}
+
+/* Fix mobile touch handling */
+.msp-canvas3d {
+  touch-action: none;
+}
+
+/* Animation transition */
+.msp-transform-control-options {
+  transition: all 0.2s ease;
+}
+
+/* Make color picker more accessible */
+.msp-color-picker {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+  border-radius: 8px !important;
+} 

@@ -1,8 +1,9 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useCallback, useState } from 'react';
 import FileUploader from '@/components/FileUploader';
 import FileList from '@/components/FileList';
 import { ViewControls } from '@/components/ViewControls';
-import { NGLViewer } from '@/components/NGLViewer';
+import { MolStarViewer } from '@/components';
+import { VisualizationWrapper } from '@/components/VisualizationWrapper';
 import { parsePDB, Molecule } from '@/utils/pdbParser';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -15,6 +16,7 @@ import { Distogram } from '@/components/Distogram';
 import { Input } from '@/components/ui/input';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { SequenceViewer, ResidueInfo } from '@/components/SequenceViewer';
+import { Maximize, Minimize } from 'lucide-react';
 
 // Amino acid property grouping for color coding
 const aminoAcidGroups = {
@@ -123,6 +125,16 @@ function VisualizeContent() {
   
   // Reference for the plot container
   const plotRef = useRef<HTMLDivElement>(null);
+  const molstarRef = useRef<any>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  
+  // Function to reset the camera when needed
+  const resetCamera = () => {
+    if (molstarRef.current && molstarRef.current.resetView) {
+      molstarRef.current.resetView();
+    }
+  };
 
   // Get the currently selected structure
   const selectedStructure = getSelectedStructure();
@@ -140,8 +152,16 @@ function VisualizeContent() {
       }));
   }, [loadedStructures]);
 
+  // Add useCallback for deleteFile to add logging
+  const handleDeleteFile = useCallback((index: number) => {
+    console.log(`Visualize: About to delete file at index ${index}`);
+    console.log('Current loadedStructures before deletion:', loadedStructures);
+    deleteFile(index);
+  }, [deleteFile, loadedStructures]);
+
   // Add an effect to log structure details for debugging
   useEffect(() => {
+    console.log('loadedStructures changed. Current count:', loadedStructures.length);
     if (loadedStructures.length > 0) {
       console.log('Currently loaded structures:', loadedStructures.map(s => ({
         id: s.id,
@@ -149,6 +169,17 @@ function VisualizeContent() {
         source: s.source,
         hasAtoms: s.molecule ? s.molecule.atoms.length : 0
       })));
+
+      // Reset camera and refresh viewer when structures change
+      if (molstarRef.current) {
+        setTimeout(() => {
+          resetCamera();
+          // Force a resize event to ensure proper rendering
+          window.dispatchEvent(new Event('resize'));
+        }, 100);
+      }
+    } else {
+      console.log('No structures loaded');
     }
   }, [loadedStructures]);
 
@@ -198,7 +229,7 @@ function VisualizeContent() {
     
     // Add structures for visualization
     addLoadedStructures(successfulFiles.map(({ file, molecule, pdbData }) => ({
-      id: file.name,
+      id: `file-${file.name}-${Date.now()}`, // Ensure unique IDs
       name: file.name,
       pdbData,
       source: 'file',
@@ -213,10 +244,12 @@ function VisualizeContent() {
   };
 
   const handleViewModeChange = (mode: ViewMode) => {
+    console.log(`Switching view mode: ${mode} (will use ${mode === 'default' && viewerState.colorScheme === 'DEFAULT' ? 'MolStar' : 'NGL'} renderer)`);
     setViewerState({ viewMode: mode });
   };
 
   const handleColorSchemeChange = (scheme: ColorScheme) => {
+    console.log(`Switching color scheme: ${scheme} (will use ${viewerState.viewMode === 'default' && scheme === 'DEFAULT' ? 'MolStar' : 'NGL'} renderer)`);
     setViewerState({ colorScheme: scheme });
   };
 
@@ -227,9 +260,55 @@ function VisualizeContent() {
   // Add a safe structure selection handler
   const handleStructureSelect = (index: number) => {
     if (index >= 0 && index < loadedStructures.length) {
+      console.log(`Selecting structure at index ${index}:`, loadedStructures[index].id);
       setSelectedFileIndex(index);
+      
+      // Force viewer update when selecting a structure
+      setTimeout(() => {
+        resetCamera();
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
     }
   };
+
+  // Handle full screen toggle
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      // Enter full screen
+      if (canvasContainerRef.current?.requestFullscreen) {
+        canvasContainerRef.current.requestFullscreen()
+          .then(() => setIsFullScreen(true))
+          .catch(err => console.error('Error attempting to enable full-screen mode:', err));
+      }
+    } else {
+      // Exit full screen
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+          .then(() => setIsFullScreen(false))
+          .catch(err => console.error('Error attempting to exit full-screen mode:', err));
+      }
+    }
+  };
+
+  // Listen for fullscreen change events
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      setIsFullScreen(!!document.fullscreenElement);
+      // Trigger resize to ensure proper rendering
+      window.dispatchEvent(new Event('resize'));
+      // Reset camera when toggling fullscreen
+      if (molstarRef.current) {
+        setTimeout(() => {
+          resetCamera();
+        }, 100);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    };
+  }, []);
 
   // Add debug logging for render
   console.log('Render state:', {
@@ -259,7 +338,7 @@ function VisualizeContent() {
             onViewModeChange={handleViewModeChange}
             onColorSchemeChange={handleColorSchemeChange}
             onFilesUploaded={handleFilesUploaded}
-            onDeleteMolecule={deleteFile}
+            onDeleteMolecule={handleDeleteFile}
             onSelectMolecule={setSelectedFileIndex}
             onAtomSizeChange={(size) => setViewerState({ atomSize: size })}
             onLigandVisibilityChange={(visible) => setViewerState({ showLigand: visible })}
@@ -372,26 +451,37 @@ function VisualizeContent() {
           {/* Left side with Canvas/Distogram tabs */}
           <div className="col-span-8">
             <Card className="overflow-hidden">
-              <Tabs defaultValue="canvas" className="h-full">
+              <Tabs defaultValue="canvas" className="h-full" onValueChange={(value) => {
+                // When switching back to canvas, trigger a resize event and reset camera
+                if (value === 'canvas') {
+                  setTimeout(() => {
+                    window.dispatchEvent(new Event('resize'));
+                    resetCamera();
+                  }, 50);
+                }
+              }}>
                 <div className="flex items-center justify-between p-3 border-b">
                   <TabsList>
                     <TabsTrigger value="canvas">Canvas</TabsTrigger>
                     <TabsTrigger value="distogram">Distance Matrix</TabsTrigger>
                   </TabsList>
-                  {selectedStructure && (
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs font-mono">
-                        {selectedStructure.name || 'Structure'}
-                      </Badge>
-                    </div>
-                  )}
                 </div>
 
                 <TabsContent value="canvas" className="m-0">
-                  <div className="aspect-square relative">
-                    <NGLViewer 
+                  <div className="aspect-square relative" ref={canvasContainerRef}>
+                    <button 
+                      onClick={toggleFullScreen}
+                      className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-background/80 hover:bg-background shadow-md transition-colors"
+                      title={isFullScreen ? "Exit Full Screen" : "Enter Full Screen"}
+                      aria-label={isFullScreen ? "Exit Full Screen" : "Enter Full Screen"}
+                    >
+                      {isFullScreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                    </button>
+                    <VisualizationWrapper 
+                      ref={molstarRef}
                       structures={loadedStructures}
                       viewerState={viewerState}
+                      key={`viewer-${loadedStructures.map(s => s.id).join('-')}`}
                     />
                   </div>
                 </TabsContent>

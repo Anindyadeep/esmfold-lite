@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import {
   Command,
   CommandEmpty,
@@ -62,6 +62,9 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Add a ref to maintain the mapping between job_id and structure_id
+  const jobIdToStructureIdMap = useRef(new Map<string, string>());
+
   const addNewJob = useCallback(async (job: Job) => {
     try {
       // First fetch the job details if we don't have them
@@ -105,10 +108,13 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
       const molecule = await parsePDB(pdbFile);
       console.log('Parsed molecule for job:', jobDetails.job_id, molecule);
       
+      // Create a unique job ID with timestamp to avoid any possibility of collision
+      const uniqueJobId = `job-${jobDetails.job_id}-${Date.now()}`;
+      console.log(`Generated unique job ID: ${uniqueJobId}`);
+      
       // Add the structure to the store with all metadata
-      // Use the job_id as the unique identifier to ensure multiple jobs work correctly
       addLoadedStructures([{
-        id: `job-${jobDetails.job_id}`, // Make sure each job has a unique ID prefixed
+        id: uniqueJobId, // Unique ID with timestamp
         name: jobDetails.job_name,
         pdbData: jobDetails.pdb_content,
         source: 'job',
@@ -119,14 +125,20 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
           created_at: jobDetails.created_at,
           completed_at: jobDetails.completed_at,
           error_message: jobDetails.error_message,
-          user_id: jobDetails.user_id
+          user_id: jobDetails.user_id,
+          job_id: jobDetails.job_id // Store original job_id in metadata
         }
       }]);
       
+      // Store the mapping between job_id and the unique structure ID
+      jobIdToStructureIdMap.current.set(job.job_id, uniqueJobId);
+      
       console.log('Added structure for job:', jobDetails.job_id);
+      return uniqueJobId;
     } catch (error) {
       console.error('Error parsing PDB data for job:', job.job_id, error);
       toast.error(`Failed to load job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return null;
     }
   }, [addLoadedStructures]);
 
@@ -146,15 +158,33 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
       const isSelected = current.some(j => j.job_id === job.job_id);
       if (isSelected) {
         console.log('Removing job:', job.job_id);
-        // Use the same prefixed ID format for removing
-        removeStructureById(`job-${job.job_id}`);
+        // Look up the structure ID from the map
+        const structureId = jobIdToStructureIdMap.current.get(job.job_id);
+        if (structureId) {
+          console.log(`Found structure ID ${structureId} for job ${job.job_id}, removing it`);
+          removeStructureById(structureId);
+          // Remove from the map
+          jobIdToStructureIdMap.current.delete(job.job_id);
+        } else {
+          console.warn(`Could not find structure ID for job ${job.job_id}`);
+        }
         return current.filter(j => j.job_id !== job.job_id);
       } else {
         console.log('Adding job:', job.job_id);
-        void addNewJob(job);
+        // Add the job in a non-blocking way and don't wait for the result
+        addNewJob(job).then(structureId => {
+          if (!structureId) {
+            console.error(`Failed to add job ${job.job_id}`);
+          }
+        });
         return [...current, job];
       }
     });
+
+    // Refresh the view after adding/removing a job
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 100);
   }, [addNewJob, removeStructureById]);
 
   useEffect(() => {

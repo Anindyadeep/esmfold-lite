@@ -83,6 +83,7 @@ export function ViewControls({
                 <SelectValue placeholder="Select view mode" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="default">Default</SelectItem>
                 <SelectItem value="cartoon">Cartoon</SelectItem>
                 <SelectItem value="spacefill">Spacefill</SelectItem>
                 <SelectItem value="licorice">Licorice</SelectItem>
