@@ -2,6 +2,62 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import type { Connect } from 'vite';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+
+// Custom middleware to handle forwarding requests to dynamic targets
+const createCustomProxyMiddleware = () => {
+  return (req: Connect.IncomingMessage, res: Connect.ServerResponse, next: Connect.NextFunction) => {
+    // Only apply to /api-proxy/* routes
+    if (req.url?.startsWith('/api-proxy/')) {
+      const targetHeader = req.headers['x-target-url'] as string;
+      
+      if (!targetHeader) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing X-Target-URL header' }));
+        return;
+      }
+      
+      try {
+        // Parse URL to get proper protocol, hostname, port
+        const targetUrl = new URL(targetHeader);
+        const target = `${targetUrl.protocol}//${targetUrl.host}`;
+        
+        console.log(`Proxying request to: ${target}${req.url.replace(/^\/api-proxy/, '')}`);
+        
+        // Create a one-time proxy for this specific request
+        const proxy = createProxyMiddleware({
+          target,
+          changeOrigin: true,
+          pathRewrite: { '^/api-proxy': '' },
+          secure: false,
+          onProxyReq: (proxyReq) => {
+            // Update the Host header to match the target
+            proxyReq.setHeader('host', targetUrl.host);
+          },
+          onError: (err) => {
+            console.error('Custom proxy error:', err);
+            if (!res.writableEnded) {
+              res.statusCode = 502;
+              res.end(JSON.stringify({ error: 'Proxy error', message: err.message }));
+            }
+          },
+        });
+        
+        // Execute the proxy for this request only
+        return proxy(req, res, next);
+      } catch (error: any) {
+        console.error('Error setting up proxy:', error);
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: 'Failed to set up proxy', message: error.message }));
+        return;
+      }
+    }
+    
+    // For all other requests, proceed to the next middleware
+    next();
+  };
+};
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -40,6 +96,10 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
+      // Add custom middleware for dynamic proxying
+      middlewares: [
+        createCustomProxyMiddleware(),
+      ],
     },
     plugins: [
       react(),

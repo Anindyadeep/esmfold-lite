@@ -103,7 +103,8 @@ export function Layout() {
           <div className="flex h-14 items-center border-b px-4 justify-between">
             {!isCollapsed && (
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-semibold tracking-tight">LiteFold</h1>
+                <img src="/logo.png" alt="LiteFold Logo" className="h-8 w-8" />
+                <h1 className="text-xl font-semibold tracking-tight">LiteFold</h1>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -120,6 +121,9 @@ export function Layout() {
                   </Tooltip>
                 </TooltipProvider>
               </div>
+            )}
+            {isCollapsed && (
+              <img src="/logo.png" alt="LiteFold Logo" className="h-8 w-8 mx-auto" />
             )}
             <Button
               variant="ghost"
@@ -149,6 +153,7 @@ export function Layout() {
                 </Link>
               ))}
             </div>
+            
             {user && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

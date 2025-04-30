@@ -15,7 +15,15 @@ interface Structure {
     completed_at?: string;
     error_message?: string | null;
     user_id?: string;
+    model?: string;
   };
+}
+
+interface ComparisonResult {
+  structureA: string; // ID of first structure
+  structureB: string; // ID of second structure
+  tmScore: number;
+  caAtomsCount: number;
 }
 
 interface VisualizeState {
@@ -23,6 +31,8 @@ interface VisualizeState {
   selectedFileIndex: number | null;
   loadedStructures: Structure[];
   viewerState: ViewerState;
+  structureComparison: ComparisonResult | null;
+  compareStructureIds: string[] | null; // IDs of structures to compare
   setFiles: (files: { file: File; molecule?: Molecule }[]) => void;
   addFiles: (files: { file: File; molecule?: Molecule }[]) => void;
   updateFile: (index: number, data: { molecule?: Molecule }) => void;
@@ -35,12 +45,16 @@ interface VisualizeState {
   deleteFile: (index: number) => void;
   updateStructureMetadata: (id: string, metadata: Structure['metadata']) => void;
   getSelectedStructure: () => Structure | null;
+  setCompareStructureIds: (ids: string[] | null) => void;
+  setStructureComparison: (result: ComparisonResult | null) => void;
 }
 
 export const useVisualizeStore = create<VisualizeState>((set, get) => ({
   files: [],
   selectedFileIndex: null,
   loadedStructures: [],
+  structureComparison: null,
+  compareStructureIds: null,
   viewerState: {
     viewMode: 'default',
     colorScheme: 'DEFAULT',
@@ -59,6 +73,8 @@ export const useVisualizeStore = create<VisualizeState>((set, get) => ({
   }),
   setSelectedFileIndex: (index) => set({ selectedFileIndex: index }),
   setLoadedStructures: (structures) => set({ loadedStructures: structures }),
+  setCompareStructureIds: (ids) => set({ compareStructureIds: ids }),
+  setStructureComparison: (result) => set({ structureComparison: result }),
   addLoadedStructures: (newStructures) => set((state) => {
     // Filter out any structures with IDs that already exist
     const existingIds = new Set(state.loadedStructures.map(s => s.id));

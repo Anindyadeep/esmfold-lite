@@ -38,7 +38,7 @@ const initialFormData: JobFormData = {
   name: "",
   description: "",
   inputString: "",
-  selectedModel: "ESMFold",
+  selectedModel: "esm3",
 };
 
 export const useJobsStore = create<JobsState>((set, get) => ({

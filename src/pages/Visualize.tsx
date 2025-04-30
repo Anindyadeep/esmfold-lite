@@ -16,9 +16,10 @@ import { Distogram } from '@/components/Distogram';
 import { Input } from '@/components/ui/input';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { SequenceViewer, ResidueInfo } from '@/components/SequenceViewer';
-import { Maximize, Minimize, Trash2 } from 'lucide-react';
+import { Maximize, Minimize, Trash2, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import StructureComparison from '@/components/StructureComparison';
 
 // Amino acid property grouping for color coding
 const aminoAcidGroups = {
@@ -139,10 +140,20 @@ function LoadedStructuresList({
                 <Badge variant={structure.source === 'file' ? "outline" : "secondary"} className="px-1.5 py-0 text-xs">
                   {structure.source === 'file' ? 'file' : 'job'}
                 </Badge>
+                {structure.source === 'job' && structure.metadata?.model && (
+                  <Badge variant={
+                    structure.metadata.model === 'esm3' ? "default" :
+                    structure.metadata.model === 'alphafold2' ? "secondary" : 
+                    "outline"
+                  } className="px-1.5 py-0 text-xs">
+                    {structure.metadata.model === 'esm3' ? 'ESM-3' :
+                     structure.metadata.model === 'alphafold2' ? 'AlphaFold2' :
+                     structure.metadata.model}
+                  </Badge>
+                )}
                 <span className="text-sm truncate max-w-[160px]">{structure.name}</span>
               </div>
               <div className="flex items-center space-x-1">
-                <span className="text-xs text-muted-foreground">{structure.molecule?.atoms.length || 0} atoms</span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -163,6 +174,14 @@ function LoadedStructuresList({
     </Card>
   );
 }
+
+// Add this helper function before the VisualizeContent function
+const getConfidenceColor = (plddt: number): string => {
+  if (plddt >= 90) return 'bg-green-500';
+  if (plddt >= 70) return 'bg-blue-500';
+  if (plddt >= 50) return 'bg-yellow-500';
+  return 'bg-red-500';
+};
 
 function VisualizeContent() {
   const {
@@ -411,8 +430,34 @@ function VisualizeContent() {
           <FileUploader onFilesUploaded={handleFilesUploaded} />
         </Card>
         
-        <Card className="p-4">
+        <Card className="p-4 min-h-[180px]">
           <JobSelector />
+        </Card>
+        
+        <Card className="p-4 min-h-[180px]">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-medium">Search from RCSB PDB</h3>
+            </div>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g. 6VXX or insulin"
+                  disabled
+                />
+                <Button variant="outline" disabled>Search</Button>
+              </div>
+              <p className="text-xs text-muted-foreground flex items-center mt-1">
+                <Info className="inline-block w-4 h-4 mr-1" />
+                Directly search protein structures from PDB
+              </p>
+              <div className="flex justify-center items-center mt-3 text-center">
+                <Badge variant="outline" className="px-4 py-2">
+                  Coming Soon
+                </Badge>
+              </div>
+            </div>
+          </div>
         </Card>
         
         {/* Add the LoadedStructuresList component */}
@@ -557,11 +602,12 @@ function VisualizeContent() {
                   <TabsList>
                     <TabsTrigger value="canvas">Canvas</TabsTrigger>
                     <TabsTrigger value="distogram">Distance Matrix</TabsTrigger>
+                    <TabsTrigger value="stats">Structure Statistics</TabsTrigger>
                   </TabsList>
                 </div>
 
                 <TabsContent value="canvas" className="m-0">
-                  <div className="aspect-square relative" ref={canvasContainerRef}>
+                  <div className="h-[820px] relative" ref={canvasContainerRef}>
                     <button 
                       onClick={toggleFullScreen}
                       className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-background/80 hover:bg-background shadow-md transition-colors"
@@ -580,7 +626,7 @@ function VisualizeContent() {
                 </TabsContent>
 
                 <TabsContent value="distogram" className="m-0">
-                  <div className="aspect-square p-4">
+                  <div className="h-[600px] p-4">
                     {selectedStructure?.molecule ? (
                       <div className="h-full w-full relative" ref={plotRef}>
                         <Distogram 
@@ -597,102 +643,179 @@ function VisualizeContent() {
                     )}
                   </div>
                 </TabsContent>
+                
+                <TabsContent value="stats" className="m-0">
+                  <div className="p-6 h-[600px] overflow-auto">
+                    {selectedStructure?.molecule ? (
+                      <div className="space-y-6">
+                        {(() => {
+                          const stats = calculateMoleculeStats(selectedStructure.molecule!);
+                          
+                          return (
+                            <div key={selectedStructure.id}>
+                              <div className="flex items-center justify-between mb-4">
+                                <h4 className="text-base font-medium">{selectedStructure.name}</h4>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant={selectedStructure.source === 'file' ? "outline" : "secondary"}>
+                                    {selectedStructure.source === 'file' ? 'File' : 'Job'}
+                                  </Badge>
+                                  {selectedStructure.source === 'job' && selectedStructure.metadata?.model && (
+                                    <Badge variant={
+                                      selectedStructure.metadata.model === 'esm3' ? "default" :
+                                      selectedStructure.metadata.model === 'alphafold2' ? "secondary" : 
+                                      "outline"
+                                    }>
+                                      {selectedStructure.metadata.model === 'esm3' ? 'ESM-3' :
+                                      selectedStructure.metadata.model === 'alphafold2' ? 'AlphaFold2' :
+                                      selectedStructure.metadata.model}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+
+                              <Separator className="my-5" />
+                              
+                              {/* Atom Statistics */}
+                              <div className="mb-6">
+                                <h5 className="text-sm font-medium mb-3">Atom Statistics</h5>
+                                <div className="grid grid-cols-2 gap-5 text-sm bg-muted/30 p-4 rounded-md">
+                                  <div className="space-y-1">
+                                    <p className="text-muted-foreground">Total Atoms</p>
+                                    <p className="font-medium text-2xl">{stats.totalAtoms}</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-muted-foreground">Unique Elements</p>
+                                    <p className="font-medium text-lg">{stats.uniqueElements.join(', ')}</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <Separator className="my-5" />
+
+                              {/* Chain Information */}
+                              <div className="mb-6">
+                                <h5 className="text-sm font-medium mb-3">Chain Information</h5>
+                                <div className="bg-muted/30 rounded-md p-4">
+                                  <div className="grid grid-cols-4 gap-3 text-sm font-medium mb-3 text-muted-foreground">
+                                    <div>Chain</div>
+                                    <div>Residues</div>
+                                    <div>Atoms</div>
+                                    <div>% of Total</div>
+                                  </div>
+                                  <div className="max-h-[200px] overflow-auto pr-2">
+                                    {stats.chainInfo.map(chain => (
+                                      <div key={chain.chainId} className="grid grid-cols-4 gap-3 text-sm py-2 border-b border-muted/20 last:border-0">
+                                        <div className="font-medium">{chain.chainId}</div>
+                                        <div>{chain.residueCount}</div>
+                                        <div>{chain.atomCount}</div>
+                                        <div>
+                                          {((chain.atomCount / stats.totalAtoms) * 100).toFixed(1)}%
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <Separator className="my-5" />
+
+                              {/* Water and Ion Information */}
+                              <div>
+                                <h5 className="text-sm font-medium mb-3">Water and Ion Content</h5>
+                                <div className="grid grid-cols-2 gap-5 text-sm bg-muted/30 p-4 rounded-md">
+                                  <div className="space-y-1">
+                                    <p className="text-muted-foreground">Water Molecules</p>
+                                    <p className="font-medium text-2xl">{stats.waterCount}</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-muted-foreground">Ion Count</p>
+                                    <p className="font-medium text-2xl">{stats.ionCount}</p>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* pLDDT Score section - Only show for job structures */}
+                              {selectedStructure.source === 'job' && selectedStructure.metadata?.plddt_score !== undefined && (
+                                <>
+                                  <Separator className="my-5" />
+                                  <div>
+                                    <h5 className="text-sm font-medium mb-3">Model Confidence</h5>
+                                    <div className="bg-muted/30 p-4 rounded-md">
+                                      <div className="flex justify-between items-center mb-2">
+                                        <span className="text-sm text-muted-foreground">pLDDT Score</span>
+                                        <span className="text-base font-medium">
+                                          {selectedStructure.metadata.plddt_score.toFixed(1)}
+                                        </span>
+                                      </div>
+                                      <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
+                                        <div 
+                                          className={`h-full ${getConfidenceColor(selectedStructure.metadata.plddt_score)}`}
+                                          style={{ width: `${Math.min(100, selectedStructure.metadata.plddt_score)}%` }}
+                                        />
+                                      </div>
+                                      <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                                        <span>Low</span>
+                                        <span>Confident</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-sm text-muted-foreground h-full flex items-center justify-center">
+                        Select a structure to view statistics
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
               </Tabs>
             </Card>
           </div>
           
           {/* Statistics Card - Right side */}
-          <div className="col-span-4">
-            <Card className="p-4 overflow-auto h-full max-h-[600px] shadow-sm">
+          <div className="col-span-4 space-y-6">
+            <Card className="p-4 shadow-sm">
               <div className="flex items-center justify-between mb-4">
-                <h5 className="text-sm font-semibold">Structure Statistics</h5>
-                {selectedStructure?.molecule && (
-                  <Badge variant={selectedStructure.source === 'file' ? "outline" : "secondary"} className="ml-2">
-                    {selectedStructure.source === 'file' ? 'File' : 'Job'}
-                  </Badge>
-                )}
+                <h5 className="text-sm font-semibold">Metrics & Comparison</h5>
+                <Badge variant="outline">Analysis</Badge>
               </div>
               
-              {selectedStructure?.molecule ? (
-                <div className="space-y-4">
-                  {(() => {
-                    const stats = calculateMoleculeStats(selectedStructure.molecule!);
-                    
-                    return (
-                      <div key={selectedStructure.id}>
-                        <div className="flex items-center mb-3">
-                          <h4 className="text-sm font-medium">{selectedStructure.name}</h4>
-                        </div>
-
-                        <Separator className="my-3" />
-                        
-                        {/* Atom Statistics */}
-                        <div className="mb-3">
-                          <h5 className="text-sm font-medium mb-2">Atom Statistics</h5>
-                          <div className="grid grid-cols-2 gap-3 text-sm bg-muted/30 p-3 rounded-md">
-                            <div className="space-y-1">
-                              <p className="text-muted-foreground">Total Atoms</p>
-                              <p className="font-medium text-lg">{stats.totalAtoms}</p>
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-muted-foreground">Unique Elements</p>
-                              <p className="font-medium">{stats.uniqueElements.join(', ')}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <Separator className="my-3" />
-
-                        {/* Chain Information */}
-                        <div className="mb-3">
-                          <h5 className="text-sm font-medium mb-2">Chain Information</h5>
-                          <div className="bg-muted/30 rounded-md p-3">
-                            <div className="grid grid-cols-4 gap-2 text-sm font-medium mb-2 text-muted-foreground">
-                              <div>Chain</div>
-                              <div>Residues</div>
-                              <div>Atoms</div>
-                              <div>% of Total</div>
-                            </div>
-                            <div className="max-h-[150px] overflow-auto pr-2">
-                              {stats.chainInfo.map(chain => (
-                                <div key={chain.chainId} className="grid grid-cols-4 gap-2 text-sm py-1 border-b border-muted/20 last:border-0">
-                                  <div className="font-medium">{chain.chainId}</div>
-                                  <div>{chain.residueCount}</div>
-                                  <div>{chain.atomCount}</div>
-                                  <div>
-                                    {((chain.atomCount / stats.totalAtoms) * 100).toFixed(1)}%
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <Separator className="my-3" />
-
-                        {/* Water and Ion Information */}
-                        <div>
-                          <h5 className="text-sm font-medium mb-2">Water and Ion Content</h5>
-                          <div className="grid grid-cols-2 gap-3 text-sm bg-muted/30 p-3 rounded-md">
-                            <div className="space-y-1">
-                              <p className="text-muted-foreground">Water Molecules</p>
-                              <p className="font-medium text-lg">{stats.waterCount}</p>
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-muted-foreground">Ion Count</p>
-                              <p className="font-medium text-lg">{stats.ionCount}</p>
-                            </div>
-                          </div>
-                        </div>
+              <div className="space-y-6">
+                {/* pLDDT Score section - Only show for job structures */}
+                {selectedStructure?.molecule && selectedStructure.source === 'job' && selectedStructure.metadata?.plddt_score !== undefined && (
+                  <div>
+                    <h5 className="text-sm font-medium mb-2">Model Confidence</h5>
+                    <div className="bg-muted/30 p-3 rounded-md">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm text-muted-foreground">pLDDT Score</span>
+                        <span className="text-sm font-medium">
+                          {selectedStructure.metadata.plddt_score.toFixed(1)}
+                        </span>
                       </div>
-                    );
-                  })()}
+                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full ${getConfidenceColor(selectedStructure.metadata.plddt_score)}`}
+                          style={{ width: `${Math.min(100, selectedStructure.metadata.plddt_score)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                        <span>Low</span>
+                        <span>Confident</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Structure Comparison component */}
+                <div>
+                  <h5 className="text-sm font-medium mb-2">Structure Comparison</h5>
+                  <StructureComparison />
                 </div>
-              ) : (
-                <div className="text-center py-4 text-sm text-muted-foreground h-[400px] flex items-center justify-center">
-                  Select a structure to view statistics
-                </div>
-              )}
+              </div>
             </Card>
           </div>
         </div>

@@ -22,6 +22,10 @@ import { CheckCircle2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "../../src/components/ui/alert";
 import { DEFAULT_API_URL, ServerType } from '../../src/lib/config';
 import { supabase } from '../../src/lib/supabase';
+import { Input } from "../../src/components/ui/input";
+
+// Check if we're running in development mode
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 export default function Settings() {
   const [serverType, setServerType] = useState<ServerType>('default');
@@ -94,11 +98,33 @@ export default function Settings() {
 
   const validateUrl = (url: string): boolean => {
     try {
-      new URL(url);
+      // Clear previous error
       setUrlError('');
+      
+      // Check for empty URL
+      if (!url.trim()) {
+        setUrlError('URL cannot be empty');
+        return false;
+      }
+      
+      // Basic pattern check - must start with http:// or https://
+      if (!url.match(/^https?:\/\//i)) {
+        setUrlError('URL must start with http:// or https://');
+        return false;
+      }
+      
+      // Try to create URL object to validate
+      const urlObj = new URL(url);
+      
+      // Check for localhost or IP in production (except during development)
+      if (!isDevelopment && (urlObj.hostname === 'localhost' || urlObj.hostname.match(/^127\./))) {
+        setUrlError('Cannot use localhost URLs');
+        return false;
+      }
+      
       return true;
-    } catch (error) {
-      setUrlError('Please enter a valid URL with protocol (e.g., https://example.com)');
+    } catch (e) {
+      setUrlError('Invalid URL format');
       return false;
     }
   };
@@ -108,23 +134,59 @@ export default function Settings() {
     setConnectionError('');
     
     try {
+      console.log(`Testing connection to: ${url}/health`);
+      // Make sure the URL doesn't have trailing slashes
+      const cleanUrl = url.trim().replace(/\/+$/, '');
+      
       // Try to connect to the API with a simple GET request
       // Adding a query parameter to prevent caching
       const timestamp = new Date().getTime();
-      const response = await fetch(`${url}/health?t=${timestamp}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-        // Short timeout to avoid long waiting periods
-        signal: AbortSignal.timeout(5000)
-      });
       
-      if (!response.ok) {
-        throw new Error(`Server responded with status: ${response.status}`);
+      try {
+        // First attempt with regular CORS mode
+        const response = await fetch(`${cleanUrl}/health?t=${timestamp}`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          mode: 'cors',
+          signal: AbortSignal.timeout(5000)
+        });
+        
+        console.log('Connection test response:', response.status, response.statusText);
+        
+        if (!response.ok) {
+          try {
+            const errorData = await response.text();
+            console.error('Server response error:', errorData);
+          } catch (e) {
+            console.error('Could not read error response');
+          }
+          throw new Error(`Server responded with status: ${response.status}`);
+        }
+        
+        return true;
+      } catch (corsError) {
+        // If CORS error occurs, we can try a different approach
+        if (corsError.message && corsError.message.includes('CORS')) {
+          console.log('CORS error detected, trying alternative approach');
+          
+          // Try using a proxy approach for development
+          if (isDevelopment) {
+            const proxyUrl = '/api-proxy';
+            localStorage.setItem('useProxyForCustom', 'true');
+            
+            // Save without testing further - the app will use the proxy
+            return true;
+          }
+          
+          // For production, inform the user about CORS issues
+          throw new Error('CORS policy blocked the request. The server needs to enable CORS for this domain.');
+        }
+        
+        // If it's not a CORS error, re-throw it
+        throw corsError;
       }
-      
-      return true;
     } catch (error) {
       console.error('Connection test failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -158,16 +220,24 @@ export default function Settings() {
           const connectionSuccessful = await testConnection(customUrl);
           
           if (connectionSuccessful) {
+            // Clean the URL before saving (remove trailing slashes)
+            const cleanUrl = customUrl.trim().replace(/\/+$/, '');
             localStorage.setItem('serverType', 'custom');
-            localStorage.setItem('savedCustomUrl', customUrl);
-            setSavedUrl(customUrl);
+            localStorage.setItem('savedCustomUrl', cleanUrl);
+            setSavedUrl(cleanUrl);
             setSaveSuccess(true);
+            
+            // Reload the page to apply the new server configuration
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
           }
-          // If connection failed, the error is shown and we don't save
+          // If connection failed, the error is shown by testConnection
         }
       }
     } catch (error) {
       console.error('Error saving settings:', error);
+      setConnectionError(`Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -288,21 +358,27 @@ export default function Settings() {
                 {serverType === 'custom' && (
                   <div className="space-y-2">
                     <label className="text-sm text-muted-foreground">Custom URL</label>
-                    <input
-                      type="text"
-                      placeholder="Enter custom server URL"
-                      value={customUrl}
-                      onChange={(e) => {
-                        setCustomUrl(e.target.value);
-                        setSaveSuccess(false);
-                        setConnectionError('');
-                      }}
-                      className="w-full p-2 border rounded"
-                    />
+                    <div className="space-y-1">
+                      <Input
+                        type="url"
+                        placeholder="https://your-backend-url.example.com"
+                        value={customUrl}
+                        onChange={(e) => {
+                          setCustomUrl(e.target.value);
+                          setSaveSuccess(false);
+                          setConnectionError('');
+                        }}
+                        className="w-full"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Enter the full URL without trailing slashes. Must start with http:// or https://
+                      </p>
+                    </div>
+                    {urlError && <p className="text-xs text-destructive">{urlError}</p>}
                     <Button 
                       onClick={handleSaveUrl} 
                       className="w-full"
-                      disabled={isCheckingConnection}
+                      disabled={isCheckingConnection || !validateUrl(customUrl)}
                     >
                       {isCheckingConnection ? 'Testing Connection...' : 'Save Configuration'}
                     </Button>

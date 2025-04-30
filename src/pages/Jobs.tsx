@@ -83,6 +83,14 @@ export default function Jobs() {
   const [inputMethod, setInputMethod] = useState<"text" | "file">("text");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  
+  // Input validation
+  const [inputError, setInputError] = useState<string | null>(null);
+  
+  // FASTA format validation
+  const isFastaFormat = (input: string): boolean => {
+    return input.trim().startsWith(">");
+  };
 
   // Get the current user's session
   const [user, setUser] = useState(null);
@@ -133,12 +141,45 @@ export default function Jobs() {
       toast.error('Please login to submit jobs');
       return;
     }
+    
+    // Input validation based on model
+    if (formData.selectedModel === "alphafold2" && !isFastaFormat(formData.inputString)) {
+      toast.error('AlphaFold2 only supports FASTA format input. Please provide a sequence in FASTA format.');
+      setInputError('AlphaFold2 requires FASTA format input');
+      return;
+    }
+    
+    if (formData.selectedModel === "esm3" && isFastaFormat(formData.inputString)) {
+      toast.error('ESM-3 only supports raw sequence input. Please provide a sequence without FASTA header.');
+      setInputError('ESM-3 requires raw sequence input');
+      return;
+    }
+    
+    // Clear any previous errors
+    setInputError(null);
+    
     await submitJob();
   };
 
   const handleExampleClick = (input: string) => {
-    setFormData({ inputString: input });
+    const isFasta = isFastaFormat(input);
+    
+    if (formData.selectedModel === "esm3" && isFasta) {
+      toast.warning('Converting FASTA to raw sequence for ESM-3 model');
+      // Extract just the sequence part from FASTA
+      const sequence = input.split('\n').slice(1).join('');
+      setFormData({ inputString: sequence });
+    } else if (formData.selectedModel === "alphafold2" && !isFasta) {
+      toast.warning('Converting raw sequence to FASTA format for AlphaFold2 model');
+      // Create a simple FASTA header
+      const fasta = `>Protein_Sequence\n${input}`;
+      setFormData({ inputString: fasta });
+    } else {
+      setFormData({ inputString: input });
+    }
+    
     setInputMethod("text");
+    setInputError(null);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,6 +196,21 @@ export default function Jobs() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
+      
+      // Validate file content based on model
+      if (formData.selectedModel === "esm3" && isFastaFormat(content)) {
+        toast.error('ESM-3 only supports raw sequence input. Please provide a sequence without FASTA header.');
+        setInputError('ESM-3 requires raw sequence input');
+        return;
+      }
+      
+      if (formData.selectedModel === "alphafold2" && !isFastaFormat(content)) {
+        toast.error('AlphaFold2 only supports FASTA format input. Please provide a sequence in FASTA format.');
+        setInputError('AlphaFold2 requires FASTA format input');
+        return;
+      }
+      
+      setInputError(null);
       setFormData({ inputString: content });
     };
     reader.onerror = () => {
@@ -227,16 +283,27 @@ export default function Jobs() {
                 <Label htmlFor="model">Using model</Label>
                 <Select
                   value={formData.selectedModel}
-                  onValueChange={(value) => setFormData({ selectedModel: value })}
+                  onValueChange={(value) => {
+                    setFormData({ selectedModel: value });
+                    
+                    // Validate existing input when model changes
+                    if (formData.inputString) {
+                      if (value === "alphafold2" && !isFastaFormat(formData.inputString)) {
+                        setInputError('AlphaFold2 requires FASTA format input');
+                      } else if (value === "esm3" && isFastaFormat(formData.inputString)) {
+                        setInputError('ESM-3 requires raw sequence input');
+                      } else {
+                        setInputError(null);
+                      }
+                    }
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ESMFold">ESM-3</SelectItem>
-                    <SelectItem value="alphafold2" disabled>
-                      AlphaFold2 (Coming soon)
-                    </SelectItem>
+                    <SelectItem value="esm3">ESM-3 <span className="text-xs text-muted-foreground ml-1">(Fastest, good for initial predictions)</span></SelectItem>
+                    <SelectItem value="alphafold2">AlphaFold2 <span className="text-xs text-muted-foreground ml-1">(Slower but highly accurate)</span></SelectItem>
                     <SelectItem value="Chai-1" disabled>
                       Chai-1 (Coming soon)
                     </SelectItem>
@@ -245,16 +312,23 @@ export default function Jobs() {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground flex items-center mt-1">
+                  <Info className="inline-block w-4 h-4 mr-1" />
+                  {formData.selectedModel === "esm3" 
+                    ? "ESM-3 is the fastest model, useful for initial bulk or rough predictions." 
+                    : formData.selectedModel === "alphafold2" 
+                    ? "AlphaFold2 is slower but highly accurate, ideal when precision is critical."
+                    : "Select a model based on your prediction needs."}
+                </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="predictionType">Prediction type</Label>
                 <Select
                   value="protein"
-                  onValueChange={(value) => {}}
-                  disabled={true}
+                  onValueChange={() => {}}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-muted/50">
                     <SelectValue placeholder="Select prediction type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -264,6 +338,10 @@ export default function Jobs() {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground flex items-center mt-1">
+                  <Info className="inline-block w-4 h-4 mr-1" />
+                  Currently only protein structure predictions are supported.
+                </p>
               </div>
 
               <div className="space-y-2 flex-grow">
@@ -278,14 +356,30 @@ export default function Jobs() {
                 </div>
                 
                 {inputMethod === "text" ? (
-                  <Textarea
-                    id="inputString"
-                    value={formData.inputString}
-                    onChange={(e) => setFormData({ inputString: e.target.value })}
-                    placeholder="Enter protein sequence in FASTA format"
-                    className="h-[calc(100%-2rem)]"
-                    required={inputMethod === "text"}
-                  />
+                  <div className="space-y-2">
+                    <Textarea
+                      id="inputString"
+                      value={formData.inputString}
+                      onChange={(e) => {
+                        setFormData({ inputString: e.target.value });
+                        setInputError(null); // Clear error on change
+                      }}
+                      placeholder="Enter protein sequence in FASTA format"
+                      className={`h-[calc(100%-4rem)] ${inputError ? 'border-red-500' : ''}`}
+                      required={inputMethod === "text"}
+                    />
+                    {inputError && (
+                      <p className="text-red-500 text-sm">{inputError}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      <Info className="inline-block w-4 h-4 mr-1" />
+                      {formData.selectedModel === "alphafold2" 
+                        ? "AlphaFold2 requires FASTA format input (starting with '>')"
+                        : formData.selectedModel === "esm3"
+                        ? "ESM-3 requires raw sequence input (without FASTA header)"
+                        : "Please enter a valid protein sequence"}
+                    </p>
+                  </div>
                 ) : (
                   <div className="border rounded-md h-[calc(100%-2rem)] flex flex-col items-center justify-center text-center p-6">
                     <input
@@ -303,12 +397,24 @@ export default function Jobs() {
                         <Badge variant="outline" className="px-2 py-1">
                           {selectedFileName}
                         </Badge>
-                        <p className="text-muted-foreground mt-1">File loaded successfully</p>
+                        <p className={`mt-1 ${inputError ? 'text-red-500' : 'text-muted-foreground'}`}>
+                          {inputError || 'File loaded successfully'}
+                        </p>
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Drag and drop your .fasta file here or click to browse
-                      </p>
+                      <>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Drag and drop your .fasta or .txt file here or click to browse
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          <Info className="inline-block w-4 h-4 mr-1" />
+                          {formData.selectedModel === "alphafold2" 
+                            ? "AlphaFold2 requires FASTA format input (starting with '>')"
+                            : formData.selectedModel === "esm3"
+                            ? "ESM-3 requires raw sequence input (without FASTA header)"
+                            : "Please upload a valid protein sequence file"}
+                        </p>
+                      </>
                     )}
                     
                     <Button 
@@ -334,9 +440,10 @@ export default function Jobs() {
           <h2 className="text-2xl font-bold mb-6">Protein Input Guide</h2>
           <Card className="p-6 h-[calc(100%-4rem)]">
             <Tabs defaultValue="sequence" className="h-full">
-              <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
                 <TabsTrigger value="sequence">Sequence</TabsTrigger>
                 <TabsTrigger value="fasta">FASTA Format</TabsTrigger>
+                <TabsTrigger value="pdb">Search from RCSB PDB</TabsTrigger>
               </TabsList>
               
               <TabsContent value="sequence" className="h-[calc(100%-3rem)] overflow-auto">
@@ -404,6 +511,33 @@ export default function Jobs() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="pdb" className="h-[calc(100%-3rem)] overflow-auto">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="pdbSearch">Search PDB ID or keyword</Label>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        id="pdbSearch"
+                        placeholder="e.g. 6VXX or insulin"
+                        disabled
+                      />
+                      <Button variant="outline" disabled>Search</Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground flex items-center mt-2">
+                      <Info className="inline-block w-4 h-4 mr-1" />
+                      Directly helps you to search protein sequences from PDB
+                    </p>
+                    <div className="flex justify-center items-center mt-8 text-center">
+                      <Badge variant="outline" className="px-4 py-2 text-base">
+                        Coming Soon
+                      </Badge>
+                    </div>
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>

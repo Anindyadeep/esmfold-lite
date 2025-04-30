@@ -16,10 +16,27 @@ interface ApiRequestOptions {
 class ApiClient {
   private baseUrl: string;
   private defaultTimeout: number;
+  private isUsingProxy: boolean;
+  private customServerUrl: string | null;
   
   constructor() {
     this.baseUrl = getApiUrl();
     this.defaultTimeout = 30000; // 30 seconds default timeout
+    
+    // Check if we're using the proxy for custom server
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    this.isUsingProxy = isDevelopment && this.baseUrl === '/api-proxy';
+    
+    // Store the actual custom URL if we're using the proxy
+    this.customServerUrl = this.isUsingProxy ? 
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('savedCustomUrl') : null) : 
+      null;
+    
+    console.log('API Client initialized with:', {
+      baseUrl: this.baseUrl,
+      isUsingProxy: this.isUsingProxy,
+      customServerUrl: this.customServerUrl
+    });
   }
   
   /**
@@ -45,12 +62,18 @@ class ApiClient {
     const { controller, timeoutId } = this.createAbortController(timeout);
     
     try {
+      // Add custom server URL as header when using proxy
+      const customHeaders = { ...headers };
+      if (this.isUsingProxy && this.customServerUrl) {
+        customHeaders['X-Target-URL'] = this.customServerUrl;
+      }
+      
       const requestOptions: RequestInit = {
         method,
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-          ...headers,
+          ...customHeaders,
         },
         signal: controller.signal,
       };

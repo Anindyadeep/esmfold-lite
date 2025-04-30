@@ -36,6 +36,7 @@ interface JobResponse {
   distogram: number[][];
   plddt_score: number;
   user_id: string;
+  model: string;
 }
 
 interface Job {
@@ -47,6 +48,7 @@ interface Job {
   pdb_content?: string;
   distogram?: number[][];
   plddt_score?: number;
+  model?: string;
 }
 
 interface JobSelectorProps {
@@ -90,6 +92,7 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
           status: 'completed',
           error_message: null,
           user_id: '',
+          model: job.model || 'unknown'
         } as JobResponse;
       }
 
@@ -126,7 +129,8 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
           completed_at: jobDetails.completed_at,
           error_message: jobDetails.error_message,
           user_id: jobDetails.user_id,
-          job_id: jobDetails.job_id // Store original job_id in metadata
+          job_id: jobDetails.job_id, // Store original job_id in metadata
+          model: jobDetails.model // Store model info in metadata
         }
       }]);
       
@@ -237,6 +241,30 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
     return <div className="p-4 text-red-500">Error: {error}</div>;
   }
 
+  // Helper function to get a model display name
+  const getModelDisplayName = (modelId: string): string => {
+    switch(modelId?.toLowerCase()) {
+      case 'esm3':
+        return 'ESM-3';
+      case 'alphafold2':
+        return 'AlphaFold2';
+      default:
+        return modelId || 'Unknown';
+    }
+  };
+
+  // Helper function to get a badge color for the model
+  const getModelBadgeVariant = (modelId: string): "default" | "secondary" | "outline" => {
+    switch(modelId?.toLowerCase()) {
+      case 'esm3':
+        return "default";
+      case 'alphafold2':
+        return "secondary";
+      default:
+        return "outline";
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Popover open={open} onOpenChange={setOpen}>
@@ -304,11 +332,18 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
                           </span>
                         </div>
                       </div>
-                      {job.plddt_score !== undefined && (
-                        <Badge variant="secondary" className="ml-2">
-                          pLDDT: {job.plddt_score.toFixed(1)}
-                        </Badge>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {job.model && (
+                          <Badge variant={getModelBadgeVariant(job.model)} className="text-xs">
+                            {getModelDisplayName(job.model)}
+                          </Badge>
+                        )}
+                        {job.plddt_score !== undefined && (
+                          <Badge variant="outline" className="ml-2">
+                            pLDDT: {job.plddt_score.toFixed(1)}
+                          </Badge>
+                        )}
+                      </div>
                     </CommandItem>
                   ))}
                 </ScrollArea>
@@ -328,7 +363,14 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
                 variant="secondary"
                 className="flex items-center gap-2 py-1 px-3"
               >
-                {job.job_name}
+                <span className="flex items-center gap-1">
+                  {job.job_name}
+                  {job.model && (
+                    <Badge variant={getModelBadgeVariant(job.model)} className="ml-1 text-xs">
+                      {getModelDisplayName(job.model)}
+                    </Badge>
+                  )}
+                </span>
                 <button
                   className="ml-1 hover:text-destructive transition-colors"
                   onClick={() => toggleJob(job)}

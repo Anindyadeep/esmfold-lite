@@ -48,8 +48,18 @@ export function getApiUrl(): string {
         return '/api';
       }
       
-      // For custom URLs in development, use the custom URL directly
-      return getLocalStorageItem('savedCustomUrl', DEFAULT_API_URL);
+      // For custom URLs in development, check if we need to use the proxy
+      const useProxy = getLocalStorageItem('useProxyForCustom', 'false') === 'true';
+      const customUrl = getLocalStorageItem('savedCustomUrl', DEFAULT_API_URL);
+      
+      if (useProxy) {
+        // Use a different proxy path for custom servers
+        console.log('Using API proxy for custom server');
+        return '/api-proxy';
+      }
+      
+      // Use custom URL directly if no proxy needed
+      return customUrl;
     }
     
     // In production
