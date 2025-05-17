@@ -3,11 +3,16 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import type { Connect } from 'vite';
+import type { ServerOptions as ProxyOptions } from 'http-proxy';
+import type { RequestHandler } from 'http-proxy-middleware';
+import type { ServerOptions } from 'http-proxy';
+import type { ClientRequest, IncomingHttpHeaders } from 'http';
+import type { IncomingMessage, ServerResponse } from 'http';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 
 // Custom middleware to handle forwarding requests to dynamic targets
 const createCustomProxyMiddleware = () => {
-  return (req: Connect.IncomingMessage, res: Connect.ServerResponse, next: Connect.NextFunction) => {
+  return (req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
     // Only apply to /api-proxy/* routes
     if (req.url?.startsWith('/api-proxy/')) {
       const targetHeader = req.headers['x-target-url'] as string;
@@ -26,23 +31,24 @@ const createCustomProxyMiddleware = () => {
         console.log(`Proxying request to: ${target}${req.url.replace(/^\/api-proxy/, '')}`);
         
         // Create a one-time proxy for this specific request
-        const proxy = createProxyMiddleware({
+        const proxyOptions: ProxyOptions = {
           target,
           changeOrigin: true,
-          pathRewrite: { '^/api-proxy': '' },
+          autoRewrite: true,
           secure: false,
-          onProxyReq: (proxyReq) => {
+          proxyReq: function(proxyReq: ClientRequest, req: IncomingMessage, res: ServerResponse) {
             // Update the Host header to match the target
             proxyReq.setHeader('host', targetUrl.host);
           },
-          onError: (err) => {
+          error: (err: Error, req: IncomingMessage, res: ServerResponse) => {
             console.error('Custom proxy error:', err);
             if (!res.writableEnded) {
               res.statusCode = 502;
               res.end(JSON.stringify({ error: 'Proxy error', message: err.message }));
             }
           },
-        });
+        };
+        const proxy = createProxyMiddleware(proxyOptions);
         
         // Execute the proxy for this request only
         return proxy(req, res, next);

@@ -1,21 +1,36 @@
 import { create } from 'zustand'
 import { Molecule } from '@/utils/pdbParser'
 import { ViewMode, ColorScheme, ViewerState } from '@/types/viewer'
+import { toast } from 'sonner'
+
+// Define the distogram data interface to match the backend format
+interface DistogramData {
+  distance_matrix: number[][];
+  bin_edges: number[];
+  max_distance: number;
+  num_bins: number;
+}
+
+// Define limits for PDB uploads and job visualizations
+const MAX_UPLOADS = 3;
+const MAX_JOBS = 3;
 
 interface Structure {
   id: string;
   pdbData: string;
-  source: 'file' | 'job';
+  source: 'file' | 'job' | 'aligned';
   molecule?: Molecule;
   name: string;
   metadata?: {
-    distogram?: number[][];
+    distogram?: number[][] | number[] | DistogramData;
     plddt_score?: number;
     created_at?: string;
     completed_at?: string;
     error_message?: string | null;
     user_id?: string;
     model?: string;
+    aligned_pdb_content?: string;
+    job_id?: string;
   };
 }
 
@@ -23,6 +38,7 @@ interface ComparisonResult {
   structureA: string; // ID of first structure
   structureB: string; // ID of second structure
   tmScore: number;
+  rmsd: number;
   caAtomsCount: number;
 }
 
@@ -47,6 +63,10 @@ interface VisualizeState {
   getSelectedStructure: () => Structure | null;
   setCompareStructureIds: (ids: string[] | null) => void;
   setStructureComparison: (result: ComparisonResult | null) => void;
+  canAddMoreFiles: () => boolean;
+  canAddMoreJobs: () => boolean;
+  getCurrentUploadCount: () => number;
+  getCurrentJobCount: () => number;
 }
 
 export const useVisualizeStore = create<VisualizeState>((set, get) => ({
@@ -63,9 +83,14 @@ export const useVisualizeStore = create<VisualizeState>((set, get) => ({
     showWaterIon: false
   },
   setFiles: (files) => set({ files }),
-  addFiles: (newFiles) => set((state) => ({ 
-    files: [...state.files, ...newFiles] 
-  })),
+  addFiles: (newFiles) => set((state) => {
+    // Check if adding these files would exceed the limit
+    if (state.files.length + newFiles.length > MAX_UPLOADS) {
+      toast.error(`You can only upload up to ${MAX_UPLOADS} PDB files`);
+      return state; // Don't add any files
+    }
+    return { files: [...state.files, ...newFiles] };
+  }),
   updateFile: (index, data) => set((state) => {
     const newFiles = [...state.files];
     newFiles[index] = { ...newFiles[index], ...data };
@@ -76,12 +101,73 @@ export const useVisualizeStore = create<VisualizeState>((set, get) => ({
   setCompareStructureIds: (ids) => set({ compareStructureIds: ids }),
   setStructureComparison: (result) => set({ structureComparison: result }),
   addLoadedStructures: (newStructures) => set((state) => {
+    // Log structures being added
+    console.log('visualizeStore: Adding structures:', newStructures.map(s => ({
+      id: s.id,
+      name: s.name,
+      source: s.source,
+      hasPdbData: !!(s.pdbData && typeof s.pdbData === 'string'),
+      pdbDataSize: (s.pdbData && typeof s.pdbData === 'string') ? s.pdbData.length : 0
+    })));
+
     // Filter out any structures with IDs that already exist
     const existingIds = new Set(state.loadedStructures.map(s => s.id));
-    const filteredNewStructures = newStructures.filter(s => !existingIds.has(s.id));
+    const filteredNewStructures = newStructures.filter(s => {
+      const alreadyExists = existingIds.has(s.id);
+      if (alreadyExists) {
+        console.log(`Structure with ID ${s.id} already exists, skipping`);
+      }
+      return !alreadyExists;
+    });
     
-    // Create updated structures array
-    const updatedStructures = [...state.loadedStructures, ...filteredNewStructures];
+    // Check for limits based on structure source
+    const fileStructures = filteredNewStructures.filter(s => s.source === 'file');
+    const jobStructures = filteredNewStructures.filter(s => s.source === 'job');
+    
+    // Calculate current counts
+    const currentFileCount = state.loadedStructures.filter(s => s.source === 'file').length;
+    const currentJobCount = state.loadedStructures.filter(s => s.source === 'job').length;
+    
+    // Check if limits would be exceeded
+    if (currentFileCount + fileStructures.length > MAX_UPLOADS) {
+      toast.error(`You can only have up to ${MAX_UPLOADS} PDB files loaded at a time`);
+      // Only add non-file structures if any
+      filteredNewStructures.length = 0;
+      filteredNewStructures.push(...jobStructures);
+    }
+    
+    if (currentJobCount + jobStructures.length > MAX_JOBS) {
+      toast.error(`You can only have up to ${MAX_JOBS} jobs loaded at a time`);
+      // Only add non-job structures if any
+      filteredNewStructures.length = 0;
+      filteredNewStructures.push(...fileStructures);
+    }
+    
+    // If no structures left to add after filtering, return the current state
+    if (filteredNewStructures.length === 0) {
+      return state;
+    }
+    
+    // Create updated structures array, ensuring PDB data is preserved
+    const updatedStructures = [
+      ...state.loadedStructures,
+      ...filteredNewStructures.map(s => {
+        // Make sure PDB data is preserved
+        const hasPdbData = !!(s.pdbData && typeof s.pdbData === 'string' && s.pdbData.length > 0);
+        if (!hasPdbData) {
+          console.warn(`Structure ${s.id} (${s.name}) has no valid PDB data!`);
+        } else {
+          console.log(`Structure ${s.id} (${s.name}) has ${s.pdbData.length} bytes of PDB data`);
+        }
+        return s;
+      })
+    ];
+    
+    console.log('visualizeStore: Updated structures array:', {
+      before: state.loadedStructures.length,
+      added: filteredNewStructures.length,
+      after: updatedStructures.length
+    });
     
     // For job structures, preserve the current selection if it's valid
     // Only auto-select the first structure if no selection exists
@@ -97,13 +183,6 @@ export const useVisualizeStore = create<VisualizeState>((set, get) => ({
     } else {
       console.log('Preserving current selection at index:', state.selectedFileIndex);
     }
-    
-    console.log('Updated structures array:', {
-      before: state.loadedStructures.length,
-      added: filteredNewStructures.length,
-      after: updatedStructures.length,
-      selectedIndex: newSelectedIndex
-    });
     
     return { 
       loadedStructures: updatedStructures,
@@ -311,5 +390,28 @@ export const useVisualizeStore = create<VisualizeState>((set, get) => ({
       return null;
     }
     return loadedStructures[selectedFileIndex];
+  },
+  
+  // Helper methods to check limits
+  getCurrentUploadCount: () => {
+    const { loadedStructures } = get();
+    return loadedStructures.filter(s => s.source === 'file').length;
+  },
+  
+  getCurrentJobCount: () => {
+    const { loadedStructures } = get();
+    return loadedStructures.filter(s => s.source === 'job').length;
+  },
+  
+  canAddMoreFiles: () => {
+    const { loadedStructures } = get();
+    const currentFileCount = loadedStructures.filter(s => s.source === 'file').length;
+    return currentFileCount < MAX_UPLOADS;
+  },
+  
+  canAddMoreJobs: () => {
+    const { loadedStructures } = get();
+    const currentJobCount = loadedStructures.filter(s => s.source === 'job').length;
+    return currentJobCount < MAX_JOBS;
   }
 })); 

@@ -33,7 +33,7 @@ export default function JobSelector({ onSelect }: JobSelectorProps) {
         setLoading(true);
         setError(null);
         
-        const data = await apiClient.get<JobList>('successful-jobs');
+        const data = await apiClient.get<JobList>('jobs/successful');
         
         if (isMounted) {
           setJobs(data);

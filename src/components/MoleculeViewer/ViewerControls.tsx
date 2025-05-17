@@ -31,7 +31,7 @@ import {
 // Dummy data for completed jobs
 const completedJobs = [
   { id: 'ESM-1', name: 'Protein Structure Prediction 1' },
-  { id: 'ESM-2', name: 'Protein Structure Prediction 2' },
+  { id: 'ESM-3', name: 'Protein Structure Prediction 2' },
   { id: 'ESM-3', name: 'Protein Structure Prediction 3' },
   { id: 'ESM-4', name: 'Protein Structure Prediction 4' },
   { id: 'ESM-5', name: 'Protein Structure Prediction 5' },

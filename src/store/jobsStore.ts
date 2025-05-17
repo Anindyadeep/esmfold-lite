@@ -3,6 +3,8 @@ import { supabase, LiteFoldJob } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { getApiUrl } from '@/lib/config'
+import { apiClient } from '@/lib/api-client'
+import { submitSequenceForPrediction, analyzeSequenceQuality } from '@/lib/sequenceService'
 
 interface Job {
   id: string;
@@ -18,6 +20,13 @@ interface JobFormData {
   description: string;
   inputString: string;
   selectedModel: string;
+}
+
+interface DeleteJobResponse {
+  job_id: string;
+  user_id: string;
+  success: boolean;
+  error_message?: string;
 }
 
 interface JobsState {
@@ -38,7 +47,7 @@ const initialFormData: JobFormData = {
   name: "",
   description: "",
   inputString: "",
-  selectedModel: "esm3",
+  selectedModel: "alphafold2",
 };
 
 export const useJobsStore = create<JobsState>((set, get) => ({
@@ -55,7 +64,6 @@ export const useJobsStore = create<JobsState>((set, get) => ({
   submitJob: async () => {
     const { formData } = get();
     const jobId = uuidv4();
-    const API_BASE_URL = getApiUrl();
 
     try {
       // Get current user
@@ -64,8 +72,22 @@ export const useJobsStore = create<JobsState>((set, get) => ({
       if (authError || !user) {
         throw new Error('You must be logged in to submit a job');
       }
+      
+      // Analyze sequence for potential issues
+      const { issues, hasIssues, cleanedSequence } = analyzeSequenceQuality(formData.inputString);
+      
+      // Warn about non-critical issues but continue
+      if (hasIssues) {
+        issues.forEach(issue => {
+          console.warn(`Sequence issue: ${issue}`);
+          // Maybe show warnings to user
+          setTimeout(() => {
+            toast.warning(issue);
+          }, 0);
+        });
+      }
 
-      // Create job in Supabase
+      // Create job in Supabase first
       const { data, error: dbError } = await supabase
         .from('litefold-jobs')
         .insert({
@@ -73,10 +95,10 @@ export const useJobsStore = create<JobsState>((set, get) => ({
           job_name: formData.name,
           job_desc: formData.description,
           model: formData.selectedModel,
-          sequence: formData.inputString,
+          sequence: formData.inputString, // Store original sequence in DB
           status: 'pending',
           created_at: new Date().toISOString(),
-          user_id: user.id  // Add user_id to the job
+          user_id: user.id
         })
         .select()
         .single();
@@ -85,26 +107,28 @@ export const useJobsStore = create<JobsState>((set, get) => ({
         console.error('Supabase error:', dbError);
         throw new Error(dbError.message);
       }
-
-      // Submit job to API with CORS handling
-      const response = await fetch(`${API_BASE_URL}/predict`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          job_id: jobId,
-          job_name: formData.name,
-          model: formData.selectedModel,
-          sequence: formData.inputString,
-          user_id: user.id  // Add user_id to the API request
-        }),
-        mode: 'cors',
+      
+      // Submit to prediction service with enhanced error handling
+      const response = await submitSequenceForPrediction({
+        jobId,
+        jobName: formData.name,
+        model: formData.selectedModel,
+        sequence: formData.inputString, // Service will preprocess
+        userId: user.id
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.message || `API error: ${response.status}`);
+      
+      if (!response.success) {
+        // Update job status to error in Supabase
+        await supabase
+          .from('litefold-jobs')
+          .update({
+            status: 'error',
+            // Store the error message if we have it
+            error_message: response.error || 'Unknown error during submission'
+          })
+          .eq('job_id', jobId);
+          
+        throw new Error(response.error || 'Unknown error during job submission');
       }
 
       // Only update store and show toast if everything succeeded
@@ -156,7 +180,6 @@ export const useJobsStore = create<JobsState>((set, get) => ({
     try {
       // Get current user
       const { data: { user }, error: authError } = await supabase.auth.getUser();
-      const API_BASE_URL = getApiUrl();
       
       if (authError || !user) {
         throw new Error('You must be logged in to update job status');
@@ -164,38 +187,16 @@ export const useJobsStore = create<JobsState>((set, get) => ({
 
       // Add error handling for fetch
       try {
-        const response = await fetch(`${API_BASE_URL}/status/${jobId}`, {
-          method: 'GET',
-          mode: 'cors',
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
-        
-        if (!response.ok) {
-          // If we get a 404, that likely means the job doesn't exist on the server
-          if (response.status === 404) {
-            console.warn(`Job ${jobId} not found on server`);
-            
-            // Mark job as error state in the database
-            await supabase
-              .from('litefold-jobs')
-              .update({ 
-                status: 'error',
-              })
-              .eq('job_id', jobId)
-              .eq('user_id', user.id);
-              
-            get().fetchJobs();
-            return;
-          }
-          
-          // For other errors, try to get error details
-          const errorText = await response.text().catch(() => 'Unknown error');
-          throw new Error(`Failed to fetch job status: ${response.status} - ${errorText}`);
+        // Use apiClient instead of direct fetch with proper type
+        interface JobStatusResponse {
+          job_id: string;
+          status: string;
+          completed_at?: string;
+          error_message?: string;
         }
         
-        const data = await response.json();
+        // Attempt to get job status
+        const data = await apiClient.get<JobStatusResponse>(`jobs/${jobId}/status`);
         
         const { error } = await supabase
           .from('litefold-jobs')
@@ -222,6 +223,23 @@ export const useJobsStore = create<JobsState>((set, get) => ({
         get().fetchJobs();
       } catch (fetchError) {
         console.error('Error fetching job status:', fetchError);
+        
+        // Check if it's a 404 error (job not found on server)
+        if (fetchError instanceof Error && fetchError.message.includes('404')) {
+          console.warn(`Job ${jobId} not found on server`);
+          
+          // Mark job as error state in the database
+          await supabase
+            .from('litefold-jobs')
+            .update({ 
+              status: 'error',
+            })
+            .eq('job_id', jobId)
+            .eq('user_id', user.id);
+            
+          get().fetchJobs();
+          return;
+        }
         
         // Don't show error toasts for network errors as they can be spammy
         // Just update in the console
@@ -270,7 +288,18 @@ export const useJobsStore = create<JobsState>((set, get) => ({
         throw new Error('You must be logged in to delete jobs');
       }
 
-      // Delete job from Supabase
+      // Call the API to delete the job using apiClient with the correct endpoint
+      const response = await apiClient.post<DeleteJobResponse>('jobs/delete', {
+        job_id: jobId,
+        user_id: user.id
+      });
+
+      // Check API response for success
+      if (!response.success) {
+        throw new Error(response.error_message || 'API deletion failed');
+      }
+
+      // Delete job from Supabase after successful API deletion
       const { error: dbError } = await supabase
         .from('litefold-jobs')
         .delete()
@@ -284,15 +313,11 @@ export const useJobsStore = create<JobsState>((set, get) => ({
         jobs: state.jobs.filter(job => job.job_id !== jobId)
       }));
 
-      // Show success message
-      setTimeout(() => {
-        toast.success('Job deleted successfully');
-      }, 0);
+      // No toast messages here - they're now handled by the UI component
     } catch (error) {
       console.error('Error deleting job:', error);
-      setTimeout(() => {
-        toast.error(`Failed to delete job: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }, 0);
+      // Don't show error toast here, just throw the error to be caught by the UI
+      throw error;
     }
   },
 })); 

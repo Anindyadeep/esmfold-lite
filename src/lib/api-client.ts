@@ -1,4 +1,5 @@
 import { getApiUrl } from './config';
+import { supabase } from './supabase';
 
 /**
  * Common options for all API requests
@@ -49,6 +50,14 @@ class ApiClient {
   }
   
   /**
+   * Get the API key for authentication
+   */
+  private getApiKey(): string {
+    // Use fixed API key from FastAPI documentation
+    return "DPYPGUkpKiKLGBdluIh3nc8DiNt6krEzjvCjDY-Zoqw";
+  }
+  
+  /**
    * Make an API request with unified error handling
    */
   public async request<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
@@ -62,6 +71,9 @@ class ApiClient {
     const { controller, timeoutId } = this.createAbortController(timeout);
     
     try {
+      // Get API key
+      const apiKey = this.getApiKey();
+      
       // Add custom server URL as header when using proxy
       const customHeaders = { ...headers };
       if (this.isUsingProxy && this.customServerUrl) {
@@ -73,16 +85,22 @@ class ApiClient {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
           ...customHeaders,
         },
         signal: controller.signal,
       };
+      
+      // Enable credentials for CORS requests
+      requestOptions.credentials = 'include';
       
       if (data) {
         requestOptions.body = JSON.stringify(data);
       }
       
       const url = `${this.baseUrl}/${endpoint.replace(/^\//, '')}`;
+      
+      console.log(`Making API request to ${url}`);
       const response = await fetch(url, requestOptions);
       
       // Clear timeout as request completed

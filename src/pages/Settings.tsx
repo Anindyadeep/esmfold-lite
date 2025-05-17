@@ -24,6 +24,7 @@ import { Loader2 } from "lucide-react";
 import { useJobsStore } from "@/store/jobsStore";
 import { useMemo } from 'react';
 import { DEFAULT_API_URL } from "@/lib/config";
+import { apiClient } from "@/lib/api-client";
 
 // Use the default server URL from the config
 const DEFAULT_SERVER_URL = DEFAULT_API_URL;
@@ -94,19 +95,26 @@ export default function Settings() {
     if (customUrl && serverType === 'custom') {
       try {
         setIsValidating(true);
-        const healthUrl = `${customUrl.trim()}/health`;
-        const response = await fetch(healthUrl, { 
-          method: 'GET',
-          mode: 'cors',
-          headers: { 'Accept': 'application/json' }
-        });
         
-        if (response.ok) {
+        // Test the connection directly without appending to the base URL
+        try {
+          // Don't use apiClient.get here as it will append the URL again
+          const response = await fetch(`${customUrl.trim()}/health`, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Server returned ${response.status}`);
+          }
+          
           setActiveServerUrl(customUrl);
           localStorage.setItem('savedCustomUrl', customUrl);
           localStorage.setItem('customUrl', customUrl);
           toast({ title: "Success", description: "Custom server URL has been saved.", variant: "default" });
-        } else {
+        } catch (error) {
           toast({ title: "Server Error", description: "Could not connect to the server.", variant: "destructive" });
         }
       } catch {

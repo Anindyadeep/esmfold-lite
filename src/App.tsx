@@ -7,6 +7,7 @@ import { Layout } from "@/components/Layout";
 import Jobs from "@/pages/Jobs";
 import Visualize from "@/pages/Visualize";
 import Settings from "@/pages/Settings";
+import Experiments from "@/pages/Experiments";
 import NotFound from "@/pages/NotFound";
 import SignIn from "@/pages/SignIn";
 import AuthCallback from "@/pages/AuthCallback";
@@ -32,6 +33,7 @@ const App = () => (
           >
             <Route path="/" element={<Jobs />} />
             <Route path="/visualize" element={<Visualize />} />
+            <Route path="/experiments" element={<Experiments />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />
           </Route>

@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { Settings, Home, Eye, LogOut, PanelLeftClose, PanelLeft, Github } from "lucide-react";
+import { Settings, Home, Eye, LogOut, PanelLeftClose, PanelLeft, Github, FlaskConical } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -21,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 const navItems = [
   { name: "Jobs", path: "/", icon: Home },
   { name: "Visualize", path: "/visualize", icon: Eye },
+  { name: "Experiments", path: "/experiments", icon: FlaskConical },
   { name: "Settings", path: "/settings", icon: Settings },
 ];
 
@@ -53,12 +54,8 @@ export function Layout() {
   useEffect(() => {
     const checkServerStatus = async () => {
       try {
-        const apiUrl = getApiUrl();
-        const response = await fetch(`${apiUrl}/health`, { 
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        
+        // Use apiClient for health check to maintain consistent auth
+        const response = await fetch(`${getApiUrl()}/health`);
         setServerStatus(response.ok ? 'online' : 'offline');
       } catch (error) {
         setServerStatus('offline');
@@ -122,19 +119,39 @@ export function Layout() {
                 </TooltipProvider>
               </div>
             )}
-            {isCollapsed && (
-              <img src="/logo.png" alt="LiteFold Logo" className="h-8 w-8 mx-auto" />
+            {isCollapsed ? (
+              <div className="flex items-center justify-center w-full">
+                <img src="/logo.png" alt="LiteFold Logo" className="h-8 w-8" />
+              </div>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleSidebar}
+                className="h-8 w-8"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </Button>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="h-8 w-8"
-            >
-              {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-            </Button>
           </div>
-          <nav className="flex flex-col h-[calc(100%-3.5rem)] justify-between p-2">
+          {isCollapsed && (
+            <div className="flex justify-center mt-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleSidebar}
+                className="h-8 w-8"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          <nav className={cn(
+            "flex flex-col justify-between p-2",
+            isCollapsed 
+              ? "h-[calc(100%-3.5rem-2.5rem)]" // Adjust for the extra button height when collapsed
+              : "h-[calc(100%-3.5rem)]"
+          )}>
             <div className="space-y-1">
               {navItems.map((item) => (
                 <Link

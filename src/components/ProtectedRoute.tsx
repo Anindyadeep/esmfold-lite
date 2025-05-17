@@ -40,5 +40,5 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/signin" state={{ from: location }} replace />
   }
 
-  return <>{children}</>
+  return <div className="protected-route-content">{children}</div>
 } 

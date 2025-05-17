@@ -24,17 +24,27 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { getApiUrl } from '@/lib/config';
+import { apiClient } from '@/lib/api-client';
 
-interface JobResponse {
+// Define the maximum number of jobs that can be visualized
+const MAX_JOBS = 3;
+
+// Updated to match the new JobStatus format from the backend
+interface JobStatus {
   job_id: string;
   job_name: string;
   status: string;
   created_at: string;
-  completed_at: string;
-  error_message: string | null;
-  pdb_content: string;
-  distogram: number[][];
-  plddt_score: number;
+  completed_at?: string;
+  error_message?: string;
+  pdb_content?: string;
+  distogram?: {
+    distance_matrix: number[][];
+    bin_edges: number[];
+    max_distance: number;
+    num_bins: number;
+  };
+  plddt_score?: number;
   user_id: string;
   model: string;
 }
@@ -44,11 +54,9 @@ interface Job {
   job_name: string;
   created_at: string;
   completed_at: string;
-  result_path: string;
-  pdb_content?: string;
-  distogram?: number[][];
-  plddt_score?: number;
+  status: string;
   model?: string;
+  plddt_score?: number;
 }
 
 interface JobSelectorProps {
@@ -58,7 +66,13 @@ interface JobSelectorProps {
 export function JobSelector({ onSelect }: JobSelectorProps) {
   const [open, setOpen] = React.useState(false);
   const [selectedJobs, setSelectedJobs] = React.useState<Job[]>([]);
-  const { addLoadedStructures, removeStructureById } = useVisualizeStore();
+  const { 
+    addLoadedStructures, 
+    removeStructureById, 
+    loadedStructures, 
+    canAddMoreJobs, 
+    getCurrentJobCount 
+  } = useVisualizeStore();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -67,92 +81,135 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
   // Add a ref to maintain the mapping between job_id and structure_id
   const jobIdToStructureIdMap = useRef(new Map<string, string>());
 
+  // Log the current state of loaded structures for debugging
+  useEffect(() => {
+    console.log('JobSelector: Current loaded structures:', loadedStructures.map(s => ({
+      id: s.id,
+      name: s.name,
+      source: s.source
+    })));
+    
+    if (loadedStructures.length > 0) {
+      // If we have file structures already uploaded, make sure they're preserved
+      const fileStructures = loadedStructures.filter(s => s.source === 'file');
+      if (fileStructures.length > 0) {
+        console.log('JobSelector: Found file structures to preserve:', fileStructures.length);
+      }
+    }
+  }, [loadedStructures]);
+
   const addNewJob = useCallback(async (job: Job) => {
     try {
-      // First fetch the job details if we don't have them
-      let jobDetails: JobResponse;
-      const API_BASE_URL = getApiUrl();
-      
-      if (!job.pdb_content) {
-        const response = await fetch(`${API_BASE_URL}/status/${job.job_id}`, {
-          method: 'GET',
-          mode: 'cors',
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch job details');
-        }
-        jobDetails = await response.json();
-      } else {
-        jobDetails = {
-          ...job,
-          status: 'completed',
-          error_message: null,
-          user_id: '',
-          model: job.model || 'unknown'
-        } as JobResponse;
+      // Check if adding another job would exceed the limit
+      if (!canAddMoreJobs()) {
+        toast.error(`You can only visualize up to ${MAX_JOBS} jobs at a time`);
+        return null;
       }
 
-      if (!jobDetails.pdb_content) {
+      // Fetch the job details from the API using apiClient
+      const jobStatus = await apiClient.get<JobStatus>(`jobs/${job.job_id}/status`);
+      
+      // Debug the API response
+      console.log(`API Response for job ${job.job_id}:`, {
+        hasDistogram: !!jobStatus.distogram,
+        distogramType: jobStatus.distogram ? typeof jobStatus.distogram : 'undefined',
+        allFields: Object.keys(jobStatus),
+        model: jobStatus.model,
+        plddt: jobStatus.plddt_score
+      });
+      
+      if (!jobStatus.pdb_content) {
         throw new Error('No PDB content available for this job');
       }
 
+      // Check if we have valid PDB content
+      if (!jobStatus.pdb_content || jobStatus.pdb_content.length === 0) {
+        throw new Error('Empty PDB content received from server');
+      }
+      
+      console.log(`Received PDB content (${jobStatus.pdb_content.length} bytes) for job ${job.job_id}`);
+
       // Create a File object from the PDB content with a proper name
       const pdbFile = new File(
-        [jobDetails.pdb_content],
-        `${jobDetails.job_name}.pdb`,
+        [jobStatus.pdb_content],
+        `${jobStatus.job_name}.pdb`,
         { type: 'text/plain' }
       );
 
       // Parse the PDB content from the job
       const molecule = await parsePDB(pdbFile);
-      console.log('Parsed molecule for job:', jobDetails.job_id, molecule);
+      console.log('Parsed molecule for job:', jobStatus.job_id, 
+        molecule ? `${molecule.atoms.length} atoms` : 'No molecule parsed');
       
       // Create a unique job ID with timestamp to avoid any possibility of collision
-      const uniqueJobId = `job-${jobDetails.job_id}-${Date.now()}`;
+      const uniqueJobId = `job-${jobStatus.job_id}-${Date.now()}`;
       console.log(`Generated unique job ID: ${uniqueJobId}`);
       
-      // Add the structure to the store with all metadata
-      addLoadedStructures([{
+      // Create the structure object
+      const newStructure = {
         id: uniqueJobId, // Unique ID with timestamp
-        name: jobDetails.job_name,
-        pdbData: jobDetails.pdb_content,
-        source: 'job',
+        name: jobStatus.job_name,
+        pdbData: jobStatus.pdb_content,
+        source: 'job' as const,
         molecule: molecule,
         metadata: {
-          distogram: jobDetails.distogram,
-          plddt_score: jobDetails.plddt_score,
-          created_at: jobDetails.created_at,
-          completed_at: jobDetails.completed_at,
-          error_message: jobDetails.error_message,
-          user_id: jobDetails.user_id,
-          job_id: jobDetails.job_id, // Store original job_id in metadata
-          model: jobDetails.model // Store model info in metadata
+          distogram: jobStatus.distogram, // Keep the entire distogram object
+          plddt_score: jobStatus.plddt_score,
+          created_at: jobStatus.created_at,
+          completed_at: jobStatus.completed_at,
+          error_message: jobStatus.error_message,
+          user_id: jobStatus.user_id,
+          model: jobStatus.model,
+          job_id: jobStatus.job_id
         }
-      }]);
+      };
+      
+      // Log details before adding to store
+      console.log('Adding job structure to store:', {
+        id: newStructure.id,
+        name: newStructure.name,
+        pdbContentSize: newStructure.pdbData ? 
+          (typeof newStructure.pdbData === 'string' ? newStructure.pdbData.length : 'non-string data') : 
+          'no pdbData',
+        hasMolecule: !!newStructure.molecule
+      });
+      
+      // Add the structure to the store with all metadata
+      addLoadedStructures([newStructure]);
       
       // Store the mapping between job_id and the unique structure ID
       jobIdToStructureIdMap.current.set(job.job_id, uniqueJobId);
       
-      console.log('Added structure for job:', jobDetails.job_id);
+      console.log('Added structure for job:', jobStatus.job_id);
+      
+      // Check if there are any file structures already uploaded
+      const fileStructures = loadedStructures.filter(s => s.source === 'file');
+      if (fileStructures.length > 0) {
+        console.log('Found existing file structures:', fileStructures.map(s => ({
+          id: s.id,
+          name: s.name,
+          hasPdbData: !!(s.pdbData && typeof s.pdbData === 'string'),
+          pdbDataSize: s.pdbData && typeof s.pdbData === 'string' ? s.pdbData.length : 'invalid'
+        })));
+      }
+      
       return uniqueJobId;
     } catch (error) {
-      console.error('Error parsing PDB data for job:', job.job_id, error);
-      toast.error(`Failed to load job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error adding job:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to add job');
       return null;
     }
-  }, [addLoadedStructures]);
+  }, [canAddMoreJobs, onSelect]);
 
   // Cleanup effect
   useEffect(() => {
     return () => {
       // Clean up by removing all job structures when component unmounts
       selectedJobs.forEach(job => {
-        console.log('Removing structure for job:', job.job_id);
-        removeStructureById(`job-${job.job_id}`);
+        const structureId = jobIdToStructureIdMap.current.get(job.job_id);
+        if (structureId) {
+          removeStructureById(structureId);
+        }
       });
     };
   }, [selectedJobs, removeStructureById]);
@@ -175,6 +232,13 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
         return current.filter(j => j.job_id !== job.job_id);
       } else {
         console.log('Adding job:', job.job_id);
+        
+        // Check if adding another job would exceed the limit
+        if (!canAddMoreJobs()) {
+          toast.error(`You can only visualize up to ${MAX_JOBS} jobs at a time`);
+          return current;
+        }
+        
         // Add the job in a non-blocking way and don't wait for the result
         addNewJob(job).then(structureId => {
           if (!structureId) {
@@ -189,34 +253,16 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
     setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
     }, 100);
-  }, [addNewJob, removeStructureById]);
+  }, [addNewJob, removeStructureById, canAddMoreJobs]);
 
   useEffect(() => {
     const fetchJobs = async () => {
       try {
         setLoading(true);
         setError(null);
-        const API_BASE_URL = getApiUrl();
 
-        // Get current user
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) {
-          throw new Error('You must be logged in to view jobs');
-        }
-
-        // Fetch successful jobs from the API
-        const response = await fetch(`${API_BASE_URL}/successful-jobs/${user.id}`, {
-          method: 'GET',
-          mode: 'cors',
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch successful jobs: ${response.status}`);
-        }
-        const data = await response.json();
+        // Fetch successful jobs from the API using apiClient
+        const data = await apiClient.get<Job[]>('jobs/successful');
         setJobs(data);
       } catch (err) {
         console.error('Error fetching jobs:', err);
@@ -265,6 +311,9 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
     }
   };
 
+  // Determine if we should disable the job selection
+  const isJobSelectionDisabled = selectedJobs.length >= MAX_JOBS || getCurrentJobCount() >= MAX_JOBS;
+
   return (
     <div className="space-y-4">
       <Popover open={open} onOpenChange={setOpen}>
@@ -274,6 +323,7 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
             role="combobox"
             aria-expanded={open}
             className="w-full justify-between bg-background"
+            disabled={jobs.length === 0}
           >
             <span className="flex items-center gap-2">
               {selectedJobs.length > 0 ? (
@@ -302,50 +352,63 @@ export function JobSelector({ onSelect }: JobSelectorProps) {
               <CommandEmpty className="py-6 text-center text-sm">
                 No jobs found.
               </CommandEmpty>
+              {isJobSelectionDisabled && (
+                <div className="p-3 text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400 border-b">
+                  You can only visualize up to {MAX_JOBS} jobs at a time.
+                </div>
+              )}
               <CommandGroup className="p-1">
                 <ScrollArea className="h-72">
-                  {filteredJobs.map((job) => (
-                    <CommandItem
-                      key={job.job_id}
-                      value={job.job_id}
-                      onSelect={() => toggleJob(job)}
-                      className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "flex h-5 w-5 items-center justify-center rounded-sm border",
-                          selectedJobs.some(j => j.job_id === job.job_id)
-                            ? "bg-primary border-primary"
-                            : "border-muted"
-                        )}>
-                          <Check className={cn(
-                            "h-4 w-4",
-                            selectedJobs.some(j => j.job_id === job.job_id)
-                              ? "text-primary-foreground"
-                              : "opacity-0"
-                          )} />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{job.job_name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            Completed: {new Date(job.completed_at).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {job.model && (
-                          <Badge variant={getModelBadgeVariant(job.model)} className="text-xs">
-                            {getModelDisplayName(job.model)}
-                          </Badge>
+                  {filteredJobs.map((job) => {
+                    const isSelected = selectedJobs.some(j => j.job_id === job.job_id);
+                    const isDisabled = !isSelected && isJobSelectionDisabled;
+                    
+                    return (
+                      <CommandItem
+                        key={job.job_id}
+                        value={job.job_id}
+                        onSelect={() => !isDisabled && toggleJob(job)}
+                        className={cn(
+                          "flex items-center justify-between px-4 py-3",
+                          isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-accent"
                         )}
-                        {job.plddt_score !== undefined && (
-                          <Badge variant="outline" className="ml-2">
-                            pLDDT: {job.plddt_score.toFixed(1)}
-                          </Badge>
-                        )}
-                      </div>
-                    </CommandItem>
-                  ))}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "flex h-5 w-5 items-center justify-center rounded-sm border",
+                            isSelected
+                              ? "bg-primary border-primary"
+                              : "border-muted"
+                          )}>
+                            <Check className={cn(
+                              "h-4 w-4",
+                              isSelected
+                                ? "text-primary-foreground"
+                                : "opacity-0"
+                            )} />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{job.job_name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              Completed: {new Date(job.completed_at).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {job.model && (
+                            <Badge variant={getModelBadgeVariant(job.model)} className="text-xs">
+                              {getModelDisplayName(job.model)}
+                            </Badge>
+                          )}
+                          {job.plddt_score !== undefined && (
+                            <Badge variant="outline" className="ml-2">
+                              pLDDT: {job.plddt_score.toFixed(1)}
+                            </Badge>
+                          )}
+                        </div>
+                      </CommandItem>
+                    );
+                  })}
                 </ScrollArea>
               </CommandGroup>
             </CommandList>

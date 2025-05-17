@@ -65,6 +65,23 @@ export default function Home() {
           </Card>
         </Link>
 
+        <Link href="/experiments" className="group">
+          <Card className="h-full transition-all duration-300 border-border/60 hover:border-accent/30 hover:-translate-y-1">
+            <div className="card-highlight opacity-0 transition-opacity absolute inset-0" style={{ "--x": "50%", "--y": "50%" } as any}></div>
+            <CardHeader>
+              <CardTitle className="group-hover:text-accent transition-colors">Experiments</CardTitle>
+              <CardDescription>
+                View experiment comparisons and results
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-24 rounded-md bg-secondary flex items-center justify-center">
+                <div className="text-2xl font-bold bg-gradient-to-r from-molecule-green to-molecule-teal bg-clip-text text-transparent">Data</div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
         <Link href="/settings" className="group">
           <Card className="h-full transition-all duration-300 border-border/60 hover:border-accent/30 hover:-translate-y-1">
             <div className="card-highlight opacity-0 transition-opacity absolute inset-0" style={{ "--x": "50%", "--y": "50%" } as any}></div>

@@ -137,8 +137,14 @@ function LoadedStructuresList({
               onClick={() => onSelectStructure(index)}
             >
               <div className="flex items-center space-x-2">
-                <Badge variant={structure.source === 'file' ? "outline" : "secondary"} className="px-1.5 py-0 text-xs">
-                  {structure.source === 'file' ? 'file' : 'job'}
+                <Badge variant={
+                  structure.source === 'file' ? "outline" : 
+                  structure.source === 'aligned' ? "default" : 
+                  "secondary"
+                } className="px-1.5 py-0 text-xs">
+                  {structure.source === 'file' ? 'file' : 
+                   structure.source === 'aligned' ? 'aligned' : 
+                   'job'}
                 </Badge>
                 {structure.source === 'job' && structure.metadata?.model && (
                   <Badge variant={
@@ -267,7 +273,15 @@ function VisualizeContent() {
     const processedFiles = await Promise.all(newFiles.map(async (file) => {
       try {
         console.log('Processing file:', file.name);
+        // Read file content as text
         const fileData = await file.text();
+        
+        if (!fileData || fileData.length === 0) {
+          console.error('Error: Empty file content for', file.name);
+          return { file, error: 'File content is empty' };
+        }
+        
+        console.log(`Read ${fileData.length} bytes from ${file.name}`);
         
         // For CIF files, we don't need to parse them as they'll be handled directly by NGL
         const isCifFile = file.name.toLowerCase().endsWith('.cif');
@@ -276,7 +290,9 @@ function VisualizeContent() {
         if (isCifFile) {
           console.log('CIF file detected, skipping PDB parsing');
         } else {
-          console.log('Parsed molecule:', molecule);
+          console.log('Parsed molecule:', molecule ? 
+            `${molecule.atoms.length} atoms` : 
+            'No molecule parsed');
         }
         
         return { file, molecule, pdbData: fileData };
@@ -292,7 +308,9 @@ function VisualizeContent() {
 
     if (failedFiles.length > 0) {
       console.error('Failed to process files:', failedFiles.map(f => f.file.name));
-      // You might want to show an error message to the user here
+      failedFiles.forEach(f => {
+        toast.error(`Failed to process ${f.file.name}: ${f.error}`);
+      });
     }
 
     if (successfulFiles.length === 0) {
@@ -303,14 +321,28 @@ function VisualizeContent() {
     // Add files to state
     addFiles(successfulFiles.map(({ file, molecule }) => ({ file, molecule })));
     
-    // Add structures for visualization
-    addLoadedStructures(successfulFiles.map(({ file, molecule, pdbData }) => ({
-      id: `file-${file.name}-${Date.now()}`, // Ensure unique IDs
-      name: file.name,
-      pdbData,
-      source: 'file',
-      molecule
+    // Add structures for visualization with unique IDs including timestamp
+    const newStructures = successfulFiles.map(({ file, molecule, pdbData }) => {
+      const uniqueId = `file-${file.name}-${Date.now()}`;
+      console.log(`Creating structure with ID ${uniqueId}, PDB data length: ${pdbData?.length || 0}`);
+      
+      return {
+        id: uniqueId,
+        name: file.name,
+        pdbData,
+        source: 'file' as const,
+        molecule
+      };
+    });
+    
+    console.log('Adding structures to store:', newStructures.map(s => ({
+      id: s.id,
+      name: s.name,
+      pdbDataLength: s.pdbData?.length || 0
     })));
+    
+    // Add all structures to the store
+    addLoadedStructures(newStructures);
 
     // Auto-select the first file if none selected
     if (selectedFileIndex === null) {
@@ -491,7 +523,11 @@ function VisualizeContent() {
           <Card className="p-4 bg-card">
             <div className="flex items-center justify-between mb-3">
               <h5 className="text-sm font-medium">Sequence</h5>
-              <Badge variant={selectedStructure.source === 'file' ? "outline" : "secondary"}>
+              <Badge variant={
+                selectedStructure.source === 'file' ? "outline" : 
+                selectedStructure.source === 'aligned' ? "default" : 
+                "secondary"
+              }>
                 {selectedStructure.name || 'Structure'}
               </Badge>
             </div>
@@ -618,7 +654,7 @@ function VisualizeContent() {
                     </button>
                     <VisualizationWrapper 
                       ref={molstarRef}
-                      structures={loadedStructures}
+                      structures={loadedStructures as any}
                       viewerState={viewerState}
                       key={`viewer-${loadedStructures.map(s => s.id).join('-')}`}
                     />
@@ -626,21 +662,75 @@ function VisualizeContent() {
                 </TabsContent>
 
                 <TabsContent value="distogram" className="m-0">
-                  <div className="h-[600px] p-4">
-                    {selectedStructure?.molecule ? (
-                      <div className="h-full w-full relative" ref={plotRef}>
-                        <Distogram 
-                          molecule={selectedStructure.molecule!} 
-                          data={selectedStructure.metadata?.distogram}
-                          width={plotRef?.current?.offsetWidth || 500}
-                          height={plotRef?.current?.offsetHeight || 500}
-                        />
+                  <div className="p-4 space-y-4">
+                    {/* Add persistent explanation card at the top */}
+                    <div className="bg-muted/30 p-3 rounded-md text-sm mb-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">Understanding Distance Matrices</h4>
+                        <Badge variant="outline">Reference</Badge>
                       </div>
-                    ) : (
-                      <div className="text-center py-6 text-sm text-muted-foreground h-full flex items-center justify-center">
-                        Select a structure to view its distance matrix
+                      <p className="text-muted-foreground mb-2">
+                        A distance matrix shows pairwise distances between amino acid residues in a protein structure. 
+                        Dark blue/purple areas indicate residues that are close in 3D space, while light colors show distant residues.
+                      </p>
+                      <div className="grid grid-cols-2 gap-4 mt-2 text-xs">
+                        <div>
+                          <span className="font-medium">Key Features:</span>
+                          <ul className="list-disc list-inside mt-1 space-y-1 text-muted-foreground">
+                            <li>Diagonal line: Each residue's distance to itself (0Å)</li>
+                            <li>Alpha helices: Dark bands parallel to diagonal</li>
+                            <li>Beta sheets: Dark bands perpendicular to diagonal</li>
+                            <li>Tertiary contacts: Dark spots away from diagonal</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <span className="font-medium">Color Scale:</span>
+                          <div className="h-3 w-full mt-2 rounded-sm bg-gradient-to-r from-[#000080] via-[#4B0082] via-[#800080] via-[#9400D3] to-[#F8F8FF]"></div>
+                          <div className="flex justify-between text-xs mt-1 text-muted-foreground">
+                            <span>Close (0Å)</span>
+                            <span>Distant (20Å+)</span>
+                          </div>
+                        </div>
                       </div>
-                    )}
+                    </div>
+                  
+                    <div className="h-[520px]">
+                      {selectedStructure?.molecule ? (
+                        <div className="h-full w-full relative" ref={plotRef}>
+                          {(() => {
+                            // Debug distogram data
+                            console.log('Distogram data for structure:', {
+                              id: selectedStructure.id,
+                              name: selectedStructure.name,
+                              source: selectedStructure.source,
+                              hasDistogram: !!selectedStructure.metadata?.distogram,
+                              distogramType: selectedStructure.metadata?.distogram ? typeof selectedStructure.metadata.distogram : 'undefined',
+                              distogramLength: selectedStructure.metadata?.distogram ? 
+                                Array.isArray(selectedStructure.metadata.distogram) ? selectedStructure.metadata.distogram.length : 
+                                (typeof selectedStructure.metadata.distogram === 'object' ? 'object with keys: ' + Object.keys(selectedStructure.metadata.distogram).join(', ') : 'unknown')
+                                : 0
+                            });
+                            
+                            // Always use the selected structure's molecule for distogram calculation as fallback
+                            return (
+                              <Distogram 
+                                molecule={selectedStructure.molecule!} 
+                                data={selectedStructure.metadata?.distogram}
+                                width={plotRef?.current?.offsetWidth || 500}
+                                height={plotRef?.current?.offsetHeight || 500}
+                                source={selectedStructure.source as 'file' | 'job'}
+                              />
+                            );
+                          })()}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full">
+                          <div className="text-center py-6 text-sm text-muted-foreground">
+                            <p>Select a structure to view its distance matrix</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </TabsContent>
                 
@@ -656,8 +746,14 @@ function VisualizeContent() {
                               <div className="flex items-center justify-between mb-4">
                                 <h4 className="text-base font-medium">{selectedStructure.name}</h4>
                                 <div className="flex items-center gap-2">
-                                  <Badge variant={selectedStructure.source === 'file' ? "outline" : "secondary"}>
-                                    {selectedStructure.source === 'file' ? 'File' : 'Job'}
+                                  <Badge variant={
+                                    selectedStructure.source === 'file' ? "outline" : 
+                                    selectedStructure.source === 'aligned' ? "default" : 
+                                    "secondary"
+                                  }>
+                                    {selectedStructure.source === 'file' ? 'File' : 
+                                     selectedStructure.source === 'aligned' ? 'Aligned' : 
+                                     'Job'}
                                   </Badge>
                                   {selectedStructure.source === 'job' && selectedStructure.metadata?.model && (
                                     <Badge variant={

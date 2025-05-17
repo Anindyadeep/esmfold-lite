@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Inter, Plus_Jakarta_Sans, Outfit } from "next/font/google";
 import "./globals.css";
 import { cn } from "../lib/utils";
+import { PostHogProvider } from "./components/PostHogProvider";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-heading" });
@@ -56,13 +57,15 @@ export default function RootLayout({
           plusJakarta.variable
         )}
       >
-        <div className="relative flex min-h-screen flex-col">
-          <div className="absolute inset-0 bg-grid-pattern opacity-[0.02] pointer-events-none"></div>
-          <main className="container mx-auto flex-1 space-y-8 px-5 py-10 md:px-8 lg:py-12 relative z-10">
-            {children}
-          </main>
-        </div>
+        <PostHogProvider>
+          <div className="relative flex min-h-screen flex-col">
+            <div className="absolute inset-0 bg-grid-pattern opacity-[0.02] pointer-events-none"></div>
+            <main className="container mx-auto flex-1 space-y-8 px-5 py-10 md:px-8 lg:py-12 relative z-10">
+              {children}
+            </main>
+          </div>
+        </PostHogProvider>
       </body>
     </html>
   );
-} 
+}
