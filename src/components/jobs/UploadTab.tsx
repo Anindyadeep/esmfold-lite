@@ -469,31 +469,15 @@ const UploadTab: React.FC<UploadTabProps> = ({ onSubmit }) => {
                   <SequenceViewer 
                     sequence={selectedStructure.sequence}
                     residueData={selectedStructure.residueInfo}
-                    getResidueColor={(index) => getResidueColor(selectedStructure.residueInfo[index]?.code || 'X')}
-                    onResidueClick={(index) => {
-                      const residueId = selectedStructure.residueInfo[index]?.id;
-                      if (residueId !== undefined) {
-                        // Update viewer state to display the clicked residue in licorice representation
-                        setViewerState({
-                          viewMode: 'licorice',
-                          selectedResidues: [residueId]
-                        });
-                        // Switch to structure view
-                        setViewMode('structure');
-                      }
-                    }}
                     onResidueHover={(index) => {
                       if (index === null) {
-                        // Clear selection when not hovering
                         setViewerState(prev => ({
                           ...prev,
                           selectedResidues: []
                         }));
                       } else {
-                        // Get the actual residue ID from our mapping
                         const residueId = selectedStructure.residueInfo[index]?.id;
                         if (residueId !== undefined) {
-                          // Update viewer state to highlight the hovered residue
                           setViewerState(prev => ({
                             ...prev,
                             selectedResidues: [residueId]
