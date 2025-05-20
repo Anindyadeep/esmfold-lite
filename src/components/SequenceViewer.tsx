@@ -79,7 +79,7 @@ export function SequenceViewer({
   const formatSequenceTable = () => {
     const segments = [];
     const segmentSize = 10;
-    const columns = 4; // Fixed number of columns
+    const columns = 5; // Fixed number of columns
     
     for (let i = 0; i < cleanedSequence.length; i += segmentSize) {
       segments.push(cleanedSequence.substring(i, Math.min(i + segmentSize, cleanedSequence.length)));
