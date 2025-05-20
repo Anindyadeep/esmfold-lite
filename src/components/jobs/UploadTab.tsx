@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, Maximize2, Minimize2, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -9,6 +9,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MolStarViewer } from '../MolStarViewer';
+import { parsePDB, Molecule } from '@/utils/pdbParser';
+import { VisualizationWrapper } from '../VisualizationWrapper';
+import FileUploader from '../FileUploader';
+import { SequenceViewer, ResidueInfo } from '../SequenceViewer';
 
 interface UploadTabProps {
   onSubmit?: (data: UploadData) => void;
@@ -19,63 +24,31 @@ export interface UploadData {
   description: string;
   fileName: string;
   fileContent?: ArrayBuffer;
+  molecule?: Molecule;
 }
 
-// Define types for Mol* from CDN
-declare global {
-  interface Window {
-    molstar?: {
-      Viewer: {
-        create: (elementId: string, options: any) => Promise<any>;
-      };
-      PluginExtensions?: {
-        mvs: {
-          MVSData: {
-            createBuilder: () => any;
-          };
-          loadMVS: (plugin: any, mvsData: any, options: any) => Promise<any>;
-        };
-      };
-    };
-  }
-}
+// Amino acid property grouping for color coding
+const aminoAcidGroups = {
+  hydrophobic: ['A', 'I', 'L', 'M', 'F', 'W', 'V', 'P'],
+  polar: ['N', 'C', 'Q', 'S', 'T', 'Y'],
+  acidic: ['D', 'E'],
+  basic: ['R', 'H', 'K'],
+  special: ['G'],
+  other: ['X', 'B', 'Z', 'U', 'O']
+};
 
-// Color mapping for amino acids
-const aminoAcidColors = {
-  // Hydrophobic residues
-  'A': '#cccccc', // Alanine - light gray
-  'V': '#cccccc', // Valine - light gray
-  'L': '#cccccc', // Leucine - light gray
-  'I': '#cccccc', // Isoleucine - light gray
-  'M': '#cccccc', // Methionine - light gray
-  'F': '#ffd700', // Phenylalanine - gold
-  'Y': '#ffd700', // Tyrosine - gold
-  'W': '#ffd700', // Tryptophan - gold
-  'P': '#ffccd5', // Proline - light pink
-
-  // Charged residues (negative)
-  'D': '#ff0000', // Aspartic acid - red
-  'E': '#ff0000', // Glutamic acid - red
-
-  // Charged residues (positive)
-  'K': '#0000ff', // Lysine - blue
-  'R': '#0000ff', // Arginine - blue
-  'H': '#8282d2', // Histidine - light blue
-
-  // Polar residues
-  'S': '#00ff00', // Serine - green
-  'T': '#00ff00', // Threonine - green
-  'N': '#00ff00', // Asparagine - green
-  'Q': '#00ff00', // Glutamine - green
-  'C': '#ffff00', // Cysteine - yellow
-  'G': '#ff69b4', // Glycine - pink
-
-  // Default
-  'X': '#ffffff', // Unknown - white
+// Color mapping for amino acid groups
+const getResidueColor = (code: string): string => {
+  if (aminoAcidGroups.hydrophobic.includes(code)) return '#ff8f8f'; // Red-ish
+  if (aminoAcidGroups.polar.includes(code)) return '#8fce8f'; // Green-ish  
+  if (aminoAcidGroups.acidic.includes(code)) return '#ff725c'; // Bright red
+  if (aminoAcidGroups.basic.includes(code)) return '#80b1d3'; // Blue-ish
+  if (aminoAcidGroups.special.includes(code)) return '#fdb462'; // Orange
+  return '#cccccc'; // Gray for other/unknown
 };
 
 const UploadTab: React.FC<UploadTabProps> = ({ onSubmit }) => {
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<boolean | null>(false);
   const [fileContent, setFileContent] = useState<ArrayBuffer | null>(null);
   const [fileText, setFileText] = useState<string>('');
   const [name, setName] = useState<string>('');
@@ -85,395 +58,288 @@ const UploadTab: React.FC<UploadTabProps> = ({ onSubmit }) => {
   const [viewMode, setViewMode] = useState<'structure' | 'sequence'>('structure');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fileInfo, setFileInfo] = useState<{lines: number, atoms: number}>({lines: 0, atoms: 0});
-  const [molstarLoaded, setMolstarLoaded] = useState<boolean>(false);
-  const [molstarViewer, setMolstarViewer] = useState<any>(null);
-  
-  const viewerRef = useRef<HTMLDivElement>(null);
-  const sequenceContainerRef = useRef<HTMLDivElement>(null);
-  
-  // Load Mol* scripts dynamically
-  useEffect(() => {
-    if (molstarLoaded) return;
+  const [molecule, setMolecule] = useState<Molecule | null>(null);
+  const [residueInfo, setResidueInfo] = useState<ResidueInfo[]>([]);
 
-    // Load the CSS
-    const linkElement = document.createElement('link');
-    linkElement.rel = 'stylesheet';
-    linkElement.type = 'text/css';
-    linkElement.href = 'https://cdn.jsdelivr.net/npm/molstar@latest/build/viewer/molstar.css';
-    document.head.appendChild(linkElement);
-
-    // Load the JS
-    const scriptElement = document.createElement('script');
-    scriptElement.src = 'https://cdn.jsdelivr.net/npm/molstar@latest/build/viewer/molstar.js';
-    scriptElement.onload = () => {
-      setMolstarLoaded(true);
-    };
-    document.body.appendChild(scriptElement);
-
-    return () => {
-      document.head.removeChild(linkElement);
-      document.body.removeChild(scriptElement);
-    };
-  }, []);
+  const [files, setFiles] = useState([]);
+  const [selectedFileIndex, setSelectedFileIndex] = useState(-1);
+  const [loadedStructures, setLoadedStructures] = useState([]);
+  const [viewerState, setViewerState] = useState({});
   
-  // Function to extract sequence from PDB - used outside render
-  const extractSequenceFromPDB = useCallback((pdbText: string): string => {
-    // Basic extraction of amino acid sequence from ATOM records
-    // This is a simplified version and may not work for all PDB files
-    const lines = pdbText.split('\n');
-    let atomCount = 0;
+  const molstarRef = useRef<any>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  
+  // Helper functions to replace the store actions
+  const addFiles = (newFiles) => {
+    setFiles(prevFiles => [...prevFiles, ...newFiles]);
+  };
+  
+  const updateFile = (index, updates) => {
+    setFiles(prevFiles => prevFiles.map((file, i) => 
+      i === index ? {...file, ...updates} : file
+    ));
+  };
+  
+  const addLoadedStructures = (structures) => {
+    setLoadedStructures(prev => [...prev, ...structures]);
+  };
+  
+  const deleteFile = (index) => {
+    setFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
+    if (selectedFileIndex === index) {
+      setSelectedFileIndex(-1);
+    }
+  };
+  
+  const deleteLoadedStructure = (index) => {
+    setLoadedStructures(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  const getSelectedStructure = () => {
+    return loadedStructures[0];
+  };
+  
+  // Function to reset the camera when needed
+  const resetCamera = () => {
+    if (molstarRef.current && molstarRef.current.resetView) {
+      molstarRef.current.resetView();
+    }
+  };
+
+  // Get the currently selected structure
+  const selectedStructure = getSelectedStructure();
+
+  // Calculate statistics for all loaded structures
+  const structureStats = useMemo(() => {
+    console.log('Calculating stats for all structures:', loadedStructures);
+    return loadedStructures
+      .filter(structure => structure.molecule)
+      .map(structure => ({
+        id: structure.id,
+        name: structure.name,
+        source: structure.source,
+        stats: calculateMoleculeStats(structure.molecule!)
+      }));
+  }, [loadedStructures]);
+
+  const handleFilesUploaded = async (newFiles: File[]) => {
+    console.log('Files uploaded:', newFiles);
     
-    const aminoAcidMap: Record<string, string> = {
-      'ALA': 'A', 'ARG': 'R', 'ASN': 'N', 'ASP': 'D', 'CYS': 'C',
-      'GLN': 'Q', 'GLU': 'E', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I',
-      'LEU': 'L', 'LYS': 'K', 'MET': 'M', 'PHE': 'F', 'PRO': 'P',
-      'SER': 'S', 'THR': 'T', 'TRP': 'W', 'TYR': 'Y', 'VAL': 'V',
-      'UNK': 'X'
-    };
-
-    let currentChain = '';
-    let currentResNum = '';
-    let seq = '';
-
-    for (const line of lines) {
-      if (line.startsWith('ATOM')) {
-        atomCount++;
-        if (line.includes('CA')) {
-          const chainId = line.substring(21, 22).trim();
-          const resNum = line.substring(22, 26).trim();
-          const resName = line.substring(17, 20).trim();
-          
-          // Only add if it's a new residue
-          if (chainId !== currentChain || resNum !== currentResNum) {
-            if (chainId !== currentChain && seq.length > 0) {
-              seq += ':'; // Chain separator
-            }
-            currentChain = chainId;
-            currentResNum = resNum;
-            seq += aminoAcidMap[resName] || 'X';
-          }
+    // Process each file first
+    const processedFiles = await Promise.all(newFiles.map(async (file) => {
+      try {
+        console.log('Processing file:', file.name);
+        // Read file content as text
+        const fileData = await file.text();
+        
+        if (!fileData || fileData.length === 0) {
+          console.error('Error: Empty file content for', file.name);
+          return { file, error: 'File content is empty' };
         }
+        
+        console.log(`Read ${fileData.length} bytes from ${file.name}`);
+        
+        // Parse the PDB file
+        const parsedMolecule = await parsePDB(file);
+        
+        console.log('Parsed molecule:', parsedMolecule ? 
+          `${parsedMolecule.atoms.length} atoms` : 
+          'No molecule parsed');
+          
+        return { file, molecule: parsedMolecule, pdbData: fileData };
+      } catch (error) {
+        console.error('Error processing file:', file.name, error);
+        return { file, error };
       }
+    }));
+
+    // Filter out failed files
+    const successfulFiles = processedFiles.filter(f => !f.error);
+    const failedFiles = processedFiles.filter(f => f.error);
+
+    if (failedFiles.length > 0) {
+      console.error('Failed to process files:', failedFiles.map(f => f.file.name));
+      failedFiles.forEach(f => {
+        toast.error(`Failed to process ${f.file.name}: ${f.error}`);
+      });
     }
 
-    // Update file info in a separate useEffect, not directly here
-    setFileInfo({
-      lines: lines.length,
-      atoms: atomCount
-    });
-
-    return seq;
-  }, []);
-  
-  // Handle file processing success notification
-  useEffect(() => {
-    if (sequence && fileContent) {
-      // Safe to show success notification after sequence and fileContent are set
-      const timer = setTimeout(() => {
-        toast.success('File processed successfully');
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [sequence, fileContent]);
-  
-  // Initialize viewer when Mol* is loaded and we have a file
-  useEffect(() => {
-    if (!molstarLoaded || !fileContent || !uploadedFile || !viewerRef.current) return;
-    
-    let isMounted = true;
-    
-    // Create a unique ID for this viewer instance
-    const viewerId = `molstar-viewer-${Date.now()}`;
-    
-    // Ensure the container has an ID
-    if (viewerRef.current) {
-      viewerRef.current.id = viewerId;
-    }
-    
-    // Initialize viewer
-    if (window.molstar) {
-      window.molstar.Viewer
-        .create(viewerId, { 
-          layoutIsExpanded: false, 
-          layoutShowControls: true,
-          layoutShowSequence: true,
-          layoutShowLog: false
-        })
-        .then(viewer => {
-          if (!isMounted) {
-            try {
-              viewer.dispose();
-            } catch (e) {
-              console.error('Error disposing viewer after unmount:', e);
-            }
-            return;
-          }
-          
-          setMolstarViewer(viewer);
-          
-          // Create a blob URL for the PDB file
-          const blob = new Blob([fileContent], { type: 'chemical/x-pdb' });
-          const blobUrl = URL.createObjectURL(blob);
-          
-          // Skip MVS extension if it's not available
-          if (!window.molstar.PluginExtensions?.mvs) {
-            // Fallback to direct loading
-            viewer.loadStructureFromUrl(blobUrl, 'pdb')
-              .catch(error => {
-                console.error('Error loading structure directly:', error);
-                if (isMounted) {
-                  setTimeout(() => {
-                    toast.error('Failed to visualize structure');
-                  }, 0);
-                }
-              })
-              .finally(() => {
-                URL.revokeObjectURL(blobUrl);
-              });
-            return;
-          }
-          
-          // Build an ad-hoc MVS view
-          try {
-            const builder = window.molstar.PluginExtensions.mvs.MVSData.createBuilder();
-            
-            // Use the blob URL to load the structure
-            const structure = builder
-              .url({ url: blobUrl, type: 'pdb' })
-              .parse({ format: 'pdb' })
-              .modelStructure({});
-            
-            // Create default representations
-            structure
-              .component({ selector: 'polymer' })
-              .representation({ type: 'cartoon' })
-              .color({ color: 'chain' });
-            
-            structure
-              .component({ selector: 'ligand' })
-              .representation({ type: 'ball_and_stick' })
-              .color({ color: 'element' });
-            
-            const mvsData = builder.getState();
-            
-            // Load the MVS data
-            window.molstar.PluginExtensions.mvs.loadMVS(
-              viewer.plugin, 
-              mvsData, 
-              { 
-                sourceUrl: blobUrl, 
-                sanityChecks: true, 
-                replaceExisting: false 
-              }
-            ).then(() => {
-              URL.revokeObjectURL(blobUrl);
-            }).catch(error => {
-              console.error('Error loading structure:', error);
-              if (isMounted) {
-                setTimeout(() => {
-                  toast.error('Failed to visualize structure');
-                }, 0);
-              }
-              URL.revokeObjectURL(blobUrl);
-            });
-          } catch (e) {
-            console.error('Error building MVS view:', e);
-            URL.revokeObjectURL(blobUrl);
-            if (isMounted) {
-              setTimeout(() => {
-                toast.error('Failed to create visualization');
-              }, 0);
-            }
-          }
-        })
-        .catch(error => {
-          console.error('Error initializing viewer:', error);
-          if (isMounted) {
-            setTimeout(() => {
-              toast.error('Failed to initialize 3D viewer');
-            }, 0);
-          }
-        });
-    }
-    
-    return () => {
-      isMounted = false;
-      if (molstarViewer) {
-        try {
-          molstarViewer.dispose();
-          setMolstarViewer(null);
-        } catch (e) {
-          console.error('Error disposing viewer:', e);
-        }
-      }
-    };
-  }, [molstarLoaded, fileContent, uploadedFile]);
-  
-  // Use a memoized onDrop function
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (acceptedFiles.length === 0) return;
-    
-    const file = acceptedFiles[0];
-    
-    // Check file extension
-    if (!file.name.toLowerCase().endsWith('.pdb')) {
-      setTimeout(() => toast.error('Please upload a .pdb file'), 0);
+    if (successfulFiles.length === 0) {
+      console.error('No files were processed successfully');
       return;
     }
+
+    // Add files to state
+    addFiles(successfulFiles.map(({ file, molecule }) => ({ file, molecule })));
     
-    setUploadedFile(file);
-    setName(file.name.split('.')[0]); // Set default name from filename
+    // Add structures for visualization with unique IDs including timestamp
+    const newStructures = successfulFiles.map(({ file, molecule, pdbData }) => {
+      const uniqueId = `file-${file.name}-${Date.now()}`;
+      console.log(`Creating structure with ID ${uniqueId}, PDB data length: ${pdbData?.length || 0}`);
+      
+      // Extract residue information for sequence viewer
+      const residuesById = molecule?.atoms
+        .filter(atom => atom.residue !== 'HOH' && atom.residue !== 'WAT')
+        .reduce((acc, atom) => {
+          if (!acc[atom.residueId]) {
+            acc[atom.residueId] = {
+              id: atom.residueId,
+              name: atom.residue,
+              chain: atom.chain
+            };
+          }
+          return acc;
+        }, {} as Record<number, { id: number, name: string, chain: string }>) || {};
+
+      // Sort residues by ID to maintain proper sequence order
+      const sortedResidueIds = Object.keys(residuesById)
+        .map(Number)
+        .sort((a, b) => a - b);
+      
+      // Convert 3-letter amino acid codes to 1-letter codes for display
+      const aminoAcidMap: Record<string, string> = {
+        'ALA': 'A', 'ARG': 'R', 'ASN': 'N', 'ASP': 'D',
+        'CYS': 'C', 'GLN': 'Q', 'GLU': 'E', 'GLY': 'G',
+        'HIS': 'H', 'ILE': 'I', 'LEU': 'L', 'LYS': 'K',
+        'MET': 'M', 'PHE': 'F', 'PRO': 'P', 'SER': 'S',
+        'THR': 'T', 'TRP': 'W', 'TYR': 'Y', 'VAL': 'V',
+        // Non-standard amino acids
+        'MSE': 'M', 'HSE': 'H', 'HSD': 'H', 'HSP': 'H',
+        'SEC': 'U', 'PYL': 'O', 'ASX': 'B', 'GLX': 'Z',
+        'UNK': 'X'
+      };
+      
+      // Build the residue info array
+      const residueInfo: ResidueInfo[] = [];
+      sortedResidueIds.forEach(resId => {
+        const residue = residuesById[resId];
+        const code = aminoAcidMap[residue.name] || 'X'; // Default to X for unknown
+        residueInfo.push({ 
+          id: resId, 
+          code,
+          name: residue.name,
+          chain: residue.chain
+        });
+      });
+      
+      const sequenceString = residueInfo.map(res => res.code).join('');
+      
+      return {
+        id: uniqueId,
+        name: file.name,
+        pdbData,
+        source: 'file' as const,
+        molecule,
+        sequence: sequenceString,
+        residueInfo
+      };
+    });
     
-    // Read file as text for PDB parsing and sequence extraction
-    const textReader = new FileReader();
-    textReader.onload = (e) => {
-      try {
-        const content = e.target?.result as string;
-        setFileText(content);
-        const extractedSequence = extractSequenceFromPDB(content);
-        setSequence(extractedSequence);
-      } catch (err) {
-        console.error('Error processing file text:', err);
-        setTimeout(() => toast.error('Error processing file content'), 0);
+    console.log('Adding structures to store:', newStructures.map(s => ({
+      id: s.id,
+      name: s.name,
+      pdbDataLength: s.pdbData?.length || 0
+    })));
+    
+    // Add all structures to the store
+    addLoadedStructures(newStructures);
+
+    // Auto-select the first file if none selected
+    if (selectedFileIndex === null) {
+      console.log('Auto-selecting first file');
+      setSelectedFileIndex(0);
+    }
+    setUploadedFile(true);
+  };
+  
+  // Listen for fullscreen change events
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      setIsFullScreen(!!document.fullscreenElement);
+      // Trigger resize to ensure proper rendering
+      window.dispatchEvent(new Event('resize'));
+      // Reset camera when toggling fullscreen
+      if (molstarRef.current) {
+        setTimeout(() => {
+          resetCamera();
+        }, 100);
       }
     };
-    textReader.onerror = () => {
-      setTimeout(() => toast.error('Error reading file as text'), 0);
+
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
     };
-    textReader.readAsText(file);
-    
-    // Also read file as ArrayBuffer for storage
-    const arrayBufferReader = new FileReader();
-    arrayBufferReader.onload = (e) => {
-      const content = e.target?.result as ArrayBuffer;
-      setFileContent(content);
-    };
-    arrayBufferReader.onerror = () => {
-      setTimeout(() => toast.error('Error reading file as binary'), 0);
-    };
-    arrayBufferReader.readAsArrayBuffer(file);
-  }, [extractSequenceFromPDB]);
-  
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'chemical/x-pdb': ['.pdb'],
-      'application/octet-stream': ['.pdb'],
-      'text/plain': ['.pdb'] // Some browsers might recognize PDB as text files
-    },
-    maxFiles: 1
+  }, []);
+
+  // Add debug logging for render
+  console.log('Render state:', {
+    filesCount: files.length,
+    loadedStructures: loadedStructures.length,
+    selectedFileIndex,
+    selectedStructure: selectedStructure?.id || 'none'
   });
-  
+
   // Handle form submission
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!uploadedFile || !fileContent) {
-      setTimeout(() => toast.error('Please upload a PDB file first'), 0);
+    if (!uploadedFile || !fileContent || !molecule) {
+      toast.error('Please upload a valid PDB file first');
       return;
     }
     
     setIsSubmitting(true);
     
-    // Create upload data
-    const uploadData: UploadData = {
-      name: name || (uploadedFile ? uploadedFile.name.split('.')[0] : ''),
-      description,
-      fileName: uploadedFile ? uploadedFile.name : '',
-      fileContent: fileContent
-    };
-    
-    // Call the onSubmit callback if provided
-    if (onSubmit) {
-      onSubmit(uploadData);
-      setTimeout(() => toast.success('PDB file saved successfully'), 0);
-    } else {
-      setTimeout(() => toast.success('PDB file saved successfully'), 0);
-    }
-    
+    toast.success('PDB file saved successfully');
     setIsSubmitting(false);
-  }, [uploadedFile, fileContent, name, description, onSubmit]);
+  }, [uploadedFile, fileContent, molecule, name, description, onSubmit]);
   
   // Reset all state
   const handleReset = useCallback(() => {
-    setUploadedFile(null);
+    setUploadedFile(false);
     setFileContent(null);
     setFileText('');
     setSequence('');
     setName('');
     setDescription('');
-    if (molstarViewer) {
-      try {
-        molstarViewer.dispose();
-        setMolstarViewer(null);
-      } catch (e) {
-        console.error('Error disposing viewer:', e);
-      }
-    }
-  }, [molstarViewer]);
+    setIsSubmitting(false);
+    setViewMode('structure');
+    setIsFullscreen(false);
+    setFileInfo({ lines: 0, atoms: 0 });
+    setMolecule(null);
+    setResidueInfo([]);
   
+    setFiles([]);
+    setSelectedFileIndex(-1);
+    setLoadedStructures([]);
+    setViewerState({});
+  
+    if (molstarRef.current) {
+      molstarRef.current.clear(); // assuming molstar viewer supports a `clear()` method
+    }
+  
+    setIsFullScreen(false);
+  
+    if (canvasContainerRef.current) {
+      // Optionally clear the container or reset any style/DOM changes
+      canvasContainerRef.current.innerHTML = '';
+    }
+  }, []);
+  
+
   // Toggle fullscreen mode
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen(prev => !prev);
+    // Reset camera after a small delay to ensure the viewer has resized
+    setTimeout(resetCamera, 100);
   }, []);
-  
-  // Render colored sequence - memoized to avoid re-renders
-  const renderColoredSequence = useCallback(() => {
-    if (!sequence) return null;
-    
-    // Handle multiple chains separated by colons
-    const chains = sequence.split(':');
-    
-    return (
-      <div className="font-mono text-sm overflow-x-auto">
-        {chains.map((chain, chainIndex) => (
-          <div key={chainIndex} className="mb-4">
-            {chainIndex > 0 && <div className="text-xs text-muted-foreground mb-1">Chain {String.fromCharCode(65 + chainIndex)}</div>}
-            <div className="flex flex-wrap">
-              {[...chain].map((aa, i) => (
-                <span 
-                  key={i} 
-                  className="inline-flex items-center justify-center w-8 h-8 m-0.5 rounded-md text-black font-bold"
-                  style={{ backgroundColor: aminoAcidColors[aa] || aminoAcidColors['X'] }}
-                >
-                  {aa}
-                </span>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }, [sequence]);
-  
+
   // Render the uploader if no file is uploaded yet
   if (!uploadedFile) {
     return (
-      <div className="flex flex-col items-center justify-center p-6">
-        <div 
-          {...getRootProps()} 
-          className={cn(
-            "w-full relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed",
-            "p-12 cursor-pointer hover:bg-accent/5 transition-colors",
-            isDragActive ? "border-primary bg-accent/5" : "border-muted-foreground/25"
-          )}
-        >
-          <input {...getInputProps()} />
-          <Upload className={cn(
-            "h-10 w-10 mb-4 transition-colors",
-            isDragActive ? "text-primary" : "text-muted-foreground"
-          )} />
-          <p className="text-lg font-medium">
-            {isDragActive ? "Drop the file here" : "Drag & drop a PDB file here"}
-          </p>
-          <p className="text-sm text-muted-foreground mt-2">
-            or click to select file
-          </p>
-          <p className="text-xs text-muted-foreground/70 mt-4">
-            Supports .pdb files only
-          </p>
-        </div>
-      </div>
+      <FileUploader onFilesUploaded={handleFilesUploaded} num_files={1}/>
     );
   }
   
@@ -499,7 +365,7 @@ const UploadTab: React.FC<UploadTabProps> = ({ onSubmit }) => {
                       id="structure-name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder={uploadedFile ? uploadedFile.name.split('.')[0] : "Enter a name"}
+                      placeholder={files[0].file.name.split('.')[0]}
                       className="mt-1"
                     />
                   </div>
@@ -525,9 +391,9 @@ const UploadTab: React.FC<UploadTabProps> = ({ onSubmit }) => {
                 <div className="mt-2 p-4 border rounded-lg">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium">{uploadedFile?.name}</p>
+                      <p className="font-medium">{files[0].file.name}</p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {uploadedFile ? `${(uploadedFile.size / 1024).toFixed(2)} KB` : ''}
+                        {`${(files[0].file.size / 1024).toFixed(2)} KB`}
                       </p>
                     </div>
                     <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-medium">
@@ -559,13 +425,15 @@ const UploadTab: React.FC<UploadTabProps> = ({ onSubmit }) => {
         {/* Right Column: Viewer */}
         <div>
           <Card className="overflow-hidden">
+              <Tabs value={viewMode} onValueChange={(v) => {
+                console.log('Tab changed to:', v);
+                setViewMode(v as 'structure' | 'sequence');
+              }} className="w-full">
             <div className="flex items-center justify-between p-4 border-b">
-              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'structure' | 'sequence')} className="w-full">
                 <TabsList className="grid w-[200px] grid-cols-2">
                   <TabsTrigger value="structure">3D Structure</TabsTrigger>
                   <TabsTrigger value="sequence">Sequence</TabsTrigger>
                 </TabsList>
-              </Tabs>
               <Button 
                 size="icon" 
                 variant="ghost" 
@@ -575,45 +443,69 @@ const UploadTab: React.FC<UploadTabProps> = ({ onSubmit }) => {
                 {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </Button>
             </div>
-            
-            <TabsContent value="structure" className="m-0">
-              {!molstarLoaded ? (
-                <div className="flex items-center justify-center bg-gray-100 h-[500px]">
-                  <div className="text-center">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-                    <p>Loading Mol* viewer...</p>
-                  </div>
+            <TabsContent value="structure" className="m-0" id='testing-table-component'>
+              <div className="h-[820px] relative" ref={canvasContainerRef}>
+                <VisualizationWrapper 
+                      ref={molstarRef}
+                      structures={loadedStructures as any}
+                      viewerState={{
+                        viewMode: 'default',
+                        colorScheme: 'DEFAULT',
+                        showLigand: true,
+                        showWaterIon: true,
+                        atomSize: 1.0
+                      }}
+                      key={`viewer-${loadedStructures.map(s => s.id).join('-')}`}
+                  />
                 </div>
-              ) : (
-                <div 
-                  ref={viewerRef} 
-                  className={cn(
-                    "w-full relative",
-                    isFullscreen ? "h-[calc(100vh-120px)]" : "h-[500px]"
-                  )}
-                />
-              )}
             </TabsContent>
             
             <TabsContent value="sequence" className="m-0">
-              <div 
-                ref={sequenceContainerRef}
-                className={cn(
-                  "p-6 overflow-auto bg-white",
-                  isFullscreen ? "h-[calc(100vh-120px)]" : "h-[500px]"
+              <div className={cn(
+                "p-6 overflow-auto bg-white",
+                isFullscreen ? "h-[calc(100vh-120px)]" : "h-[500px]"
+              )}>
+                {selectedStructure?.sequence && (
+                  <SequenceViewer 
+                    sequence={selectedStructure.sequence}
+                    residueData={selectedStructure.residueInfo}
+                    getResidueColor={(index) => getResidueColor(selectedStructure.residueInfo[index]?.code || 'X')}
+                    onResidueClick={(index) => {
+                      const residueId = selectedStructure.residueInfo[index]?.id;
+                      if (residueId !== undefined) {
+                        // Update viewer state to display the clicked residue in licorice representation
+                        setViewerState({
+                          viewMode: 'licorice',
+                          selectedResidues: [residueId]
+                        });
+                        // Switch to structure view
+                        setViewMode('structure');
+                      }
+                    }}
+                    onResidueHover={(index) => {
+                      if (index === null) {
+                        // Clear selection when not hovering
+                        setViewerState(prev => ({
+                          ...prev,
+                          selectedResidues: []
+                        }));
+                      } else {
+                        // Get the actual residue ID from our mapping
+                        const residueId = selectedStructure.residueInfo[index]?.id;
+                        if (residueId !== undefined) {
+                          // Update viewer state to highlight the hovered residue
+                          setViewerState(prev => ({
+                            ...prev,
+                            selectedResidues: [residueId]
+                          }));
+                        }
+                      }
+                    }}
+                  />
                 )}
-              >
-                <div className="mb-4">
-                  <h3 className="text-lg font-medium">
-                    Sequence ({sequence.replace(/:/g, '').length} residues)
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {sequence.includes(':') ? `Multiple chains detected (${sequence.split(':').length})` : 'Single chain structure'}
-                  </p>
-                </div>
-                {renderColoredSequence()}
               </div>
             </TabsContent>
+            </Tabs>
           </Card>
         </div>
       </div>
@@ -621,4 +513,74 @@ const UploadTab: React.FC<UploadTabProps> = ({ onSubmit }) => {
   );
 };
 
-export default UploadTab; 
+interface MoleculeStats {
+  totalAtoms: number;
+  uniqueElements: string[];
+  residueCounts: { [key: string]: number };
+  chainInfo: {
+    chainId: string;
+    residueCount: number;
+    atomCount: number;
+  }[];
+  waterCount: number;
+  ionCount: number;
+}
+
+const calculateMoleculeStats = (molecule: Molecule): MoleculeStats => {
+  const stats: MoleculeStats = {
+    totalAtoms: molecule.atoms.length,
+    uniqueElements: [],
+    residueCounts: {},
+    chainInfo: [],
+    waterCount: 0,
+    ionCount: 0
+  };
+
+  // Temporary sets and maps for calculations
+  const elements = new Set<string>();
+  const chainMap = new Map<string, { residues: Set<number>, atoms: number }>();
+
+  // Process each atom
+  molecule.atoms.forEach(atom => {
+    // Count unique elements
+    elements.add(atom.element);
+
+    // Count residues
+    if (!stats.residueCounts[atom.residue]) {
+      stats.residueCounts[atom.residue] = 0;
+    }
+    stats.residueCounts[atom.residue]++;
+
+    // Process chain information
+    if (!chainMap.has(atom.chain)) {
+      chainMap.set(atom.chain, { residues: new Set(), atoms: 0 });
+    }
+    const chainInfo = chainMap.get(atom.chain)!;
+    chainInfo.residues.add(atom.residueId);
+    chainInfo.atoms++;
+
+    // Count water and ions
+    if (atom.residue === 'HOH' || atom.residue === 'WAT') {
+      stats.waterCount++;
+    } else if (atom.residue.length <= 2 && !atom.residue.match(/[a-z]/i)) {
+      stats.ionCount++;
+    }
+  });
+
+  // Convert chain map to array
+  stats.chainInfo = Array.from(chainMap.entries()).map(([chainId, info]) => ({
+    chainId,
+    residueCount: info.residues.size,
+    atomCount: info.atoms
+  }));
+
+  // Sort chains by ID
+  stats.chainInfo.sort((a, b) => a.chainId.localeCompare(b.chainId));
+
+  // Convert elements set to sorted array
+  stats.uniqueElements = Array.from(elements).sort();
+
+  return stats;
+};
+
+export default UploadTab;

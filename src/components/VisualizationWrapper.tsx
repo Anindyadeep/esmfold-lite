@@ -15,16 +15,8 @@ interface VisualizationWrapperProps {
 
 export const VisualizationWrapper = forwardRef<any, VisualizationWrapperProps>(
   ({ structures, viewerState }, ref) => {
-    // Determine which visualization library to use
-    // Use MolStar only when BOTH viewMode is 'default' AND colorScheme is 'DEFAULT'
-    const useMolStar = 
-      viewerState.viewMode === 'default' && 
-      viewerState.colorScheme === 'DEFAULT';
-    
-    // Track structures for debugging
     const prevStructuresRef = useRef<string[]>([]);
     
-    // Log current structures for debugging and detect detailed changes
     useEffect(() => {
       const currentIds = structures.map(s => s.id);
       const prevIds = prevStructuresRef.current;
@@ -47,32 +39,23 @@ export const VisualizationWrapper = forwardRef<any, VisualizationWrapperProps>(
     }, [structures]);
     
     console.log(
-      `Using ${useMolStar ? 'MolStar' : 'NGL'} renderer. ` +
+      `Using MolStar renderer. ` +
       `View mode: ${viewerState.viewMode}, Color scheme: ${viewerState.colorScheme}`
     );
     
     // Create a stable key based on structure IDs and the renderer type
     // This will force re-creation when structures change or renderer switches
-    const viewerKey = `${useMolStar ? 'molstar' : 'ngl'}-${structures.map(s => s.id).join('-')}`;
+    const viewerKey = `molstar-${structures.map(s => s.id).join('-')}`;
     
     return (
       <div className="relative w-full h-full">
-        {useMolStar ? (
           <MolStarViewer
             structures={structures}
             viewerState={viewerState}
             ref={ref}
             key={viewerKey}
           />
-        ) : (
-          <NGLViewer
-            structures={structures}
-            viewerState={viewerState}
-            ref={ref}
-            key={viewerKey}
-          />
-        )}
       </div>
-    );
+    );    
   }
 ); 

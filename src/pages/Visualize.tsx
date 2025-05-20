@@ -459,7 +459,7 @@ function VisualizeContent() {
       {/* Left sidebar */}
       <div className="col-span-3 space-y-6">
         <Card className="p-4">
-          <FileUploader onFilesUploaded={handleFilesUploaded} />
+          <FileUploader onFilesUploaded={handleFilesUploaded} num_files={3} />
         </Card>
         
         <Card className="p-4 min-h-[180px]">
@@ -644,14 +644,14 @@ function VisualizeContent() {
 
                 <TabsContent value="canvas" className="m-0">
                   <div className="h-[820px] relative" ref={canvasContainerRef}>
-                    <button 
+                    {/* <button 
                       onClick={toggleFullScreen}
                       className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-background/80 hover:bg-background shadow-md transition-colors"
                       title={isFullScreen ? "Exit Full Screen" : "Enter Full Screen"}
                       aria-label={isFullScreen ? "Exit Full Screen" : "Enter Full Screen"}
                     >
                       {isFullScreen ? <Minimize size={18} /> : <Maximize size={18} />}
-                    </button>
+                    </button> */}
                     <VisualizationWrapper 
                       ref={molstarRef}
                       structures={loadedStructures as any}
