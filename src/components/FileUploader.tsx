@@ -1,31 +1,36 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useVisualizeStore } from '@/store/visualizeStore';
 import { toast } from 'sonner';
-
-// Define the maximum number of PDB uploads
-const MAX_UPLOADS = 3;
 
 interface FileUploaderProps {
   onFilesUploaded: (files: File[]) => void;
+  num_files: number;
 }
 
-const FileUploader: React.FC<FileUploaderProps> = ({ onFilesUploaded }) => {
-  const { canAddMoreFiles, getCurrentUploadCount } = useVisualizeStore();
+const FileUploader: React.FC<FileUploaderProps> = ({ onFilesUploaded, num_files }) => {
+  const [uploadCount, setUploadCount] = useState(0);
   
+  // Derived state - replaces canAddMoreFiles selector (now a value, not a function)
+  const canAddMoreFiles = useMemo(() => {
+    return uploadCount < num_files;
+  }, [uploadCount, num_files]);
+  
+  // Replaces getCurrentUploadCount selector
+  const getCurrentUploadCount = () => uploadCount;
+
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    // Check if adding these files would exceed the limit
     const currentCount = getCurrentUploadCount();
     
-    if (currentCount + acceptedFiles.length > MAX_UPLOADS) {
-      toast.error(`You can only upload up to ${MAX_UPLOADS} PDB files. You currently have ${currentCount} file(s).`);
+    if (currentCount + acceptedFiles.length > num_files) {
+      toast.error(`You can only upload up to ${num_files} PDB files. You currently have ${currentCount} file(s).`);
       return;
     }
     
+    setUploadCount(prev => prev + acceptedFiles.length);
     onFilesUploaded(acceptedFiles);
-  }, [onFilesUploaded, getCurrentUploadCount]);
+  }, [onFilesUploaded, num_files]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -35,11 +40,10 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFilesUploaded }) => {
       'application/x-ent': ['.ent'],
       'application/gzip': ['.gz']
     },
-    disabled: !canAddMoreFiles()
+    disabled: !canAddMoreFiles // Now using as a boolean value
   });
 
-  // Check if file uploads are disabled
-  const isUploadDisabled = !canAddMoreFiles();
+  const isUploadDisabled = !canAddMoreFiles;
 
   return (
     <div
@@ -60,7 +64,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFilesUploaded }) => {
         {isDragActive ? (
           "Drop the files here"
         ) : isUploadDisabled ? (
-          `Maximum of ${MAX_UPLOADS} files reached`
+          `Maximum of ${num_files} files reached`
         ) : (
           "Drag & drop files here"
         )}
@@ -75,10 +79,10 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFilesUploaded }) => {
       <p className="text-[10px] text-muted-foreground/70 mt-2">
         Supports .pdb, .cif, .ent, and .gz files
       </p>
-      {getCurrentUploadCount() > 0 && (
+      {uploadCount > 0 && (
         <div className="absolute top-1 right-2">
           <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
-            {getCurrentUploadCount()}/{MAX_UPLOADS} files
+            {uploadCount}/{num_files} files
           </span>
         </div>
       )}
